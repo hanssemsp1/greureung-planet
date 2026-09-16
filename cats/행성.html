@@ -740,6 +740,9 @@ function 코인갱신(){
   coinShown=c;
 }
 addEventListener("storage",e=>{ if(e.key===TOWN_KEY) 코인갱신(); });
+/* 장인 주소 — 만드는 사람(대표님)은 코인을 벌 필요가 없다(9/16: 「포인트가 없어서 소품을 뺄 수가 없어」).
+   주소 뒤에 ?장인 을 붙여 한 번 열면 코인 100,000 이 채워진다. 딸들에겐 알려주지 말 것 😺 */
+try{ if(/[?&]장인|[?&]%EC%9E%A5%EC%9D%B8|[?&]maker/.test(location.search)){ const t=마을읽기(); t.coin=100000; 마을쓰기(t); setTimeout(()=>안내("🛠 장인 모드 — 코인 100,000 채웠어요"), 800); history.replaceState(null,"",location.pathname); } }catch(e){}
 코인갱신();
 const puzzle=document.getElementById("puzzle"), pxframe=document.getElementById("pxframe");
 let puzzleOpenedAt=0;
