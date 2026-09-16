@@ -1,0 +1,17 @@
+{
+  "name": "그르릉 행성",
+  "short_name": "그르릉",
+  "description": "민이·망치·문대가 사는 작은 행성 — 냥이를 돌보고 행성을 꾸미는 게임",
+  "start_url": "./cats/행성.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#1a1440",
+  "theme_color": "#1a1440",
+  "lang": "ko",
+  "icons": [
+    { "src": "앱/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "앱/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "앱/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

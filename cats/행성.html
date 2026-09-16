@@ -1,6 +1,14 @@
 <!doctype html><html lang="ko"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>그르릉 행성 — 옆으로 미는 마을</title>
+<!-- 홈 화면 앱 (1단계 PWA, 대표님 9/16 「1단계만 먼저 하자」) -->
+<link rel="manifest" href="../manifest.webmanifest">
+<meta name="theme-color" content="#1a1440">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="그르릉">
+<link rel="apple-touch-icon" href="../앱/apple-touch-icon.png">
+<link rel="icon" href="../앱/icon-192.png">
 <style>
   html,body{margin:0;height:100%;background:#07061a;overflow:hidden;
     font:14px/1.5 "Pretendard","Malgun Gothic",sans-serif;color:#fff;
@@ -126,7 +134,7 @@
       <li><b>🔒</b><span>코인이 모이면 <b>다음 구역</b>을 열어 행성이 옆으로 넓어져요. 폰은 <b>가로</b>로 잡아 주세요.</span></li>
     </ol>
     <button class="go" id="introGo">시작할게요 🐾</button>
-    <small>이 안내는 왼쪽 위 「?」로 언제든 다시 볼 수 있어요</small>
+    <small>이 안내는 왼쪽 위 「?」로 언제든 다시 볼 수 있어요<br>📱 폰이면 공유(아이폰) 또는 ⋮(안드로이드) → <b>홈 화면에 추가</b> 하면 앱처럼 열려요</small>
   </div></div>
   <div id="rotate"><div><div style="font-size:40px">📱↻</div>폰을 <b>가로로</b> 돌려 주세요<br><small style="opacity:.7">그르릉 행성은 옆으로 넓은 세계예요</small></div></div>
   <div class="hud top">
@@ -153,6 +161,8 @@
   </div>
 </div>
 <script>
+/* 홈 화면 앱: 한 번 받은 그림은 폰에 남겨 둔다 (sw.js). 파일로 열었을 땐 안 된다 */
+if("serviceWorker" in navigator && location.protocol.startsWith("http")) addEventListener("load", ()=>navigator.serviceWorker.register("../sw.js", {scope:"../"}).catch(()=>{}));
 /* ─────────────────────────────────────────────────────────────
    그르릉 행성 — 가로 화면, 옆으로 미는 마을
 
