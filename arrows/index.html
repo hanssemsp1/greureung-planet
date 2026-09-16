@@ -258,6 +258,10 @@ const 곡선판 = 3;
 if (save.curve !== 곡선판){ save.lv = 1; save.curve = 곡선판; flush(); }
 
 let pieces = [], grid = emptyGrid(), drops = 3, done = false, dead = false;
+/* 금빛 화살표 = 코인 (대표님 9/16: 「황금색 깰 때 물방울이라고 나오는데 그건 안 주기로 했잖아」)
+   물방울은 3개 고정·코인으로만 산다. 금빛을 꺼내면 그 자리에서 🪙 이 지갑에 들어간다 — 판을 못 깨도 번 건 남는다 */
+const 금값 = () => 10 + save.lv;
+function 금코인(n){ const town = JSON.parse(localStorage.getItem("nyangi_town_v1") || "{}"); town.coin = (town.coin || 0) + n; localStorage.setItem("nyangi_town_v1", JSON.stringify(town)); }
 let bad = null, shake = 0, hint = null, info = null, msg = null, parts = [], earned = 0;
 let timed = false, timeLeft = 0, timeTotal = 0, timeout = false, cheer = 0, cheerT = 0, lastTick = 0;
 /* 클리어 축하 — 셋이 앞발 들고 펄쩍, ♥ 와 금빛 반짝이가 판 아래에서 솟는다 */
@@ -421,11 +425,11 @@ function tap(r, c){
     });
   }
 
-  for (let i=0;i<gained;i++) if (drops < 3) drops++;   // 물방울은 최대 3개 (대표님 9/16: 「물방울 수는 3개만 하자」)
+  if (gained) 금코인(gained * 금값());                   // 금빛 하나 = 🪙 (10+레벨). 물방울은 안 준다
 
-  if (perfect)          say(gained ? "퍼펙트 ×" + (line.length+1) + "  물방울 +" + gained
+  if (perfect)          say(gained ? "퍼펙트 ×" + (line.length+1) + "  🪙 +" + gained * 금값()
                                    : "퍼펙트 ×" + (line.length+1), THEME.perfect);
-  else if (gained)      say("물방울 +" + gained, GOLD);
+  else if (gained)      say("🪙 +" + gained * 금값(), GOLD);
   // 고양이 눈 = 정말 찾기 어려웠던 수에만. 대표님(9/16): 「할 때마다가 아니라 어려운 거 했을 때만 나와야지」
   //   → 나갈 수 있는 화살표가 남은 것의 8% 이하(30개 중 2개꼴)이면서 길이 8칸 이상이었을 때. 그리고 한 판에 최대 3번, 5수 간격.
   else if (before.size <= Math.max(1, Math.round(alive().length * 0.08)) && path.length >= 8
