@@ -399,7 +399,7 @@ const BUILDINGS=[ { n:"상점", im:load("소품/상점_그림자.png"), u:.560, 
      누르면 창고가 열린다(원래와 같음). 놓기 규칙엔 관여하지 않는다(창고몸통 규칙이 이미 있다). */
   { n:"창고선명", im:load("소품/창고_선명.png"), u:.656, v:.904, 크기:4.22, 가로:1.11, 바닥:0.878, 장식:true, 열기:()=>창고열기() },
 ];
-let 건물옮기기=false;   // (아래 지갑 코드 뒤에서 장인이면 true) 못 박았다. 장인 주소(?maker)로 열면 창고 선명판만 꾹 눌러 끌 수 있다 (대표님 9/16: 「창고 조금 더 옮기면 맞을 것 같은데」)
+let 건물옮기기=false, 건물편집=false;   // 대표님 9/16: 「이제 화살표는 없애 줘, 괜히 건드릴까 봐」 → 주소에 ?maker&build 를 붙였을 때만 손잡이가 나온다. 장인 주소(?maker)로 열면 창고 선명판만 꾹 눌러 끌 수 있다 (대표님 9/16: 「창고 조금 더 옮기면 맞을 것 같은데」)
 /* 대표님 9/16: 「숫자 외우기가 힘들다」 → 놓을 때마다 숫자를 복사해 둔다. 채팅에 Ctrl+V 만 하면 된다 */
 const 건물이름=b=> b.n==="창고선명" ? "창고" : b.n;
 function 창고숫자복사(b){
@@ -857,9 +857,10 @@ function 코인갱신(){
 addEventListener("storage",e=>{ if(e.key===TOWN_KEY) 코인갱신(); });
 /* 장인 주소 — 만드는 사람(대표님)은 코인을 벌 필요가 없다(9/16: 「포인트가 없어서 소품을 뺄 수가 없어」).
    주소 뒤에 ?장인 을 붙여 한 번 열면 코인 100,000 이 채워진다. 딸들에겐 알려주지 말 것 😺 */
-try{ if(/[?&]장인|[?&]%EC%9E%A5%EC%9D%B8|[?&]maker/.test(location.search)){ const t=마을읽기(); t.coin=100000; t.maker=true; 마을쓰기(t); setTimeout(()=>안내("🛠 장인 모드 — 코인 100,000 채웠어요"), 800); history.replaceState(null,"",location.pathname); } }catch(e){}
+try{ if(/[?&]build|[?&]건물|[?&]%EA%B1%B4%EB%AC%BC/.test(location.search)) 건물편집=true;
+  if(/[?&]장인|[?&]%EC%9E%A5%EC%9D%B8|[?&]maker/.test(location.search)){ const t=마을읽기(); t.coin=100000; t.maker=true; 마을쓰기(t); setTimeout(()=>안내("🛠 장인 모드 — 코인 100,000 채웠어요"), 800); history.replaceState(null,"",location.pathname); } }catch(e){}
 코인갱신();
-try{ const t=마을읽기(); 건물옮기기=!!t.maker; if(건물옮기기){ const bt=t.buildings||{}; for(const b of BUILDINGS){ if(bt[b.n]){ b.u=bt[b.n].u; b.v=bt[b.n].v; if(bt[b.n].크기) b.크기=bt[b.n].크기; if(bt[b.n].가로) b.가로=bt[b.n].가로; } } } }catch(e){}   // 장인은 창고 선명판을 옮길 수 있고, 옮긴 자리를 기억한다
+try{ const t=마을읽기(); 건물옮기기=!!t.maker && 건물편집; if(건물옮기기){ const bt=t.buildings||{}; for(const b of BUILDINGS){ if(bt[b.n]){ b.u=bt[b.n].u; b.v=bt[b.n].v; if(bt[b.n].크기) b.크기=bt[b.n].크기; if(bt[b.n].가로) b.가로=bt[b.n].가로; } } } }catch(e){}   // 장인은 창고 선명판을 옮길 수 있고, 옮긴 자리를 기억한다
 /* 처음 소개 — 처음 한 번만. 「?」로 다시 */
 const intro=document.getElementById("intro");
 function 소개열기(){ intro.hidden=false; }
