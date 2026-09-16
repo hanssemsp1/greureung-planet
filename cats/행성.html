@@ -93,6 +93,10 @@
   .it .sub{display:block;font-size:10px;opacity:.7;margin-top:1px}
   .it .mood{display:block;font-size:11px;color:#ff8fa3;letter-spacing:1px}
   .it.adopt img{border-radius:10px}
+  #cats{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 8px}
+  #cats button{background:#ffffff14;color:#fff;border:1px solid #ffffff22;border-radius:999px;padding:4px 10px;font-size:12px;cursor:pointer}
+  #cats button.on{background:#ffd36e;color:#3b2a00;border-color:#ffd36e}
+  #cats[hidden]{display:none}
   #items{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px}
   .it{background:#ffffff12;border:1px solid #ffffff22;border-radius:12px;padding:6px 4px 4px;
     text-align:center;cursor:pointer;font-size:11px}
@@ -143,6 +147,7 @@
   <div id="puzzle" hidden><div class="card"><iframe id="pxframe" title="화살표 퍼즐"></iframe><button id="pxclose">✕</button></div></div>
   <div id="panel" hidden>
     <h3><span><span id="ptabs"><button id="tabStore" class="tab">📦 창고</button><button id="tabShop" class="tab">🛒 상점</button><button id="tabCats" class="tab">🐾 냥이</button><button id="tabAdopt" class="tab">🏠 입양</button></span> <span id="ptitle">꺼낼 것을 고르세요</span></span><button id="pclose">닫기</button></h3>
+    <div id="cats" hidden></div>
     <div id="items"></div>
   </div>
 </div>
@@ -388,17 +393,16 @@ function 건물놓을수있나(b,u,v){
 }
 
 /* 땅에 놓인 것. 나중엔 플레이어가 창고에서 꺼내 놓는 자리가 여기 들어간다. */
-let PROPSET=[
-  {n:"냥이집_1", u:.735, v:.93 },
-  {n:"변기_1",  u:.80,  v:.96 },
-  {n:"밥그릇_1", u:.68,  v:.97 },
-  {n:"물그릇_1", u:.715, v:.975},
-  {n:"캣타워_3", u:.86,  v:.90 },
-  {n:"나무_1",  u:.92,  v:.86 },
-];
+let PROPSET=[];                                 // 대표님 9/16: 「첫 화면은 창고하고 상점만 — 게임을 해서 구해야 하니까」
+/* 예전엔 아래 여섯 개가 처음부터 놓여 있었다. 이미 저장된 마을에서도 「그 자리 그대로」인 것만 한 번 걷어 낸다 (옮긴 건 산 걸로 친다) */
+const 예전기본=[{n:"냥이집_1",u:.735,v:.93},{n:"변기_1",u:.80,v:.96},{n:"밥그릇_1",u:.68,v:.97},{n:"물그릇_1",u:.715,v:.975},{n:"캣타워_3",u:.86,v:.90},{n:"나무_1",u:.92,v:.86}];
 /* 놓은 자리는 브라우저에 남긴다 — 새로고침해도 마을이 그대로다 */
 try{ const sv=JSON.parse(localStorage.getItem("그르릉_배치")||"null");
-  if(Array.isArray(sv)) PROPSET=sv.filter(p=>PROPS[p.n]); }catch(e){}
+  if(Array.isArray(sv)) PROPSET=sv.filter(p=>PROPS[p.n]);
+  if(!localStorage.getItem("그르릉_기본정리")){
+    PROPSET=PROPSET.filter(p=>!예전기본.some(d=>d.n===p.n && Math.abs(d.u-p.u)<1e-4 && Math.abs(d.v-p.v)<1e-4));
+    localStorage.setItem("그르릉_기본정리","1"); localStorage.setItem("그르릉_배치", JSON.stringify(PROPSET.map(p=>({n:p.n,u:p.u,v:p.v,f:p.f||1}))));
+  } }catch(e){}
 function 저장(){ try{ localStorage.setItem("그르릉_배치", JSON.stringify(PROPSET.map(p=>({n:p.n,u:p.u,v:p.v,f:p.f||1})))); }catch(e){} }
 
 /* 자세 그림은 쓸 때 불러온다. 4마리×19장을 처음부터 다 받으면 느리다. */
@@ -441,7 +445,7 @@ function decide(c, tt){
   if(c.dash>0){
     c.dash--;
     // ⚠️ 우다다는 「제자리 근처에서」 뛰는 것이다. 온 동네를 가로지르면 남의 자리를 침범한다.
-    c.tu = Math.max(.14, Math.min(.86, c.home + (Math.random()-.5)*.30));
+    c.tu = Math.max(.14, Math.min(열린끝()-.04, c.home + (Math.random()-.5)*.30));   // 잠긴 구역으로는 안 간다
     c.walk = 2; c.pose = "우다다"; c.until = tt+6;
     return;
   }
@@ -455,7 +459,7 @@ function decide(c, tt){
     c.pose="사냥자세"; c.until=tt+1.6+Math.random(); c.next="뛰어오르기"; return;
   }
   if(r < .40){                                   // 어디론가 걸어간다
-    c.tu = Math.max(.15, Math.min(.85, c.home + (Math.random()-.5)*.22));
+    c.tu = Math.max(.15, Math.min(열린끝()-.04, c.home + (Math.random()-.5)*.22));
     c.walk=1; c.pose="서기"; c.until=tt+12; return;
   }
   if(r < .55){ c.pose=pick(심심); c.until=tt+2.5+Math.random()*3; return; }
@@ -494,7 +498,7 @@ function 이름부르기(n){
   const c=CATS.find(c=>c.n===n); if(!c) return;
   const tt=(performance.now()-t0)/1000;
   let tu=(camX+W/2)/landW();                      // 화면 가운데
-  tu=Math.max(.15, Math.min(.85, tu));
+  tu=Math.max(.15, Math.min(열린끝()-.04, tu));
   if(c.v<창고자리.v1 && tu>창고자리.u0-.03 && tu<창고자리.u1+.03)
     tu = (tu-창고자리.u0 < 창고자리.u1-tu) ? 창고자리.u0-.03 : 창고자리.u1+.03;
   c.dash=0; c.next=null; c.called=true;
@@ -597,7 +601,7 @@ function breathe(im,x,y,w,h,ph,tt,wag){
 }
 
 /* 카메라 — 좌우로만 민다 */
-let camX=0, maxX=0;
+let camX=0, maxX=0, 첫화면잡음=false;
 let drag=null;
 const hint=document.getElementById("hint");
 let hinted=false;
@@ -871,7 +875,7 @@ document.getElementById("tostore").addEventListener("pointerdown",e=>e.stopPropa
    → 🛒 상점은 따로. 창고 = 내 물건(꺼내기), 상점 = 값표(사기). 나중에 마을에 상점 건물이 생기면 그 건물을 눌러도 열린다. */
 const ptitle=document.getElementById("ptitle");
 let 패널종류="store";
-function 탭표시(k){ 패널종류=k; document.getElementById("tabStore").classList.toggle("on",k==="store"); document.getElementById("tabShop").classList.toggle("on",k==="shop"); }
+function 탭표시(k){ 패널종류=k; document.getElementById("cats").hidden = k!=="shop"; document.getElementById("tabStore").classList.toggle("on",k==="store"); document.getElementById("tabShop").classList.toggle("on",k==="shop"); }
 document.getElementById("tabStore").onclick=()=>창고열기();
 document.getElementById("tabShop").onclick=()=>상점열기();
 document.getElementById("tabCats").onclick=()=>냥이목록열기();
@@ -926,15 +930,34 @@ function 창고열기(){
     : '<div class="it none">비어 있어요 — 🛒 상점에서 사 오세요. 놓인 것은 끌어서 📦 창고에 넣기로 다시 들어와요</div>';
   panel.hidden=false; hide();
 }
+/* 상점 종류 (대표님 9/16: 「상점에 이미지가 많으니까 열면 다른 화면이 안 보인다」 → 한 종류씩만 보이게) */
+const 상점종류=[
+  ["냥이용품", n=>/^(캣타워|냥이집|변기|스크래처|캣닢|사료|밥그릇|물그릇|츄르)/.test(n)],
+  ["잔디·꽃",  n=>/^(잔디|꽃밭|이끼밭)/.test(n)],
+  ["나무",     n=>/나무/.test(n)],
+  ["집",       n=>/^우주집/.test(n)],
+  ["마을",     n=>/^(연못|놀이터|운석|온천|다리|가로등|모래언덕|바위|발바닥|버섯등|지구본등|버섯산|무지개산|방울언덕|폭포산|낚시터|항구)/.test(n)],
+  ["가게",     n=>/^(가게_|우체국)/.test(n)],
+  ["관공서",   n=>/^(천문대|부엌|소방서|법원|경찰서|병원|학교)/.test(n)],
+  ["밭",       n=>/^밭_/.test(n)],
+];
+let 상점칸=0;
+const catsEl=document.getElementById("cats");
 function 상점열기(){
   const t=가진것(), coin=t.coin|0;
-  const shop=Object.keys(PROPS).sort((a,b)=>값(a)-값(b));          // 다 판다 — 같은 걸 여러 개 살 수 있다
+  const 모두=Object.keys(PROPS).sort((a,b)=>값(a)-값(b));          // 다 판다 — 같은 걸 여러 개 살 수 있다
+  const 종류=상점종류.filter(([,ok])=>모두.some(ok));
+  if(상점칸>=종류.length) 상점칸=0;
+  catsEl.innerHTML=종류.map(([k],i)=>'<button data-k="'+i+'"'+(i===상점칸?' class="on"':'')+'>'+k+'</button>').join("");
+  catsEl.hidden=false;
+  const shop=모두.filter(종류[상점칸][1]);
   const placed={}; for(const p of PROPSET) placed[p.n]=(placed[p.n]||0)+1;
   ptitle.textContent="🪙 "+coin.toLocaleString()+" 있어요 · 누를 때마다 하나씩 사요"; 탭표시("shop");
   items.innerHTML = shop.map(n=>{ const own=(t.inv[n]|0)+(placed[n]||0);
     return '<div class="it shop'+(coin<값(n)?' poor':'')+'" data-shop="'+n+'"><img src="소품/'+n+'_그림자.png" alt="">'+label(n)+'<span class="price">🪙 '+값(n).toLocaleString()+(own?' · 보유 '+own:'')+'</span></div>'; }).join("");
   panel.hidden=false; hide();
 }
+catsEl.addEventListener("click",e=>{ const b=e.target.closest("button[data-k]"); if(!b) return; 상점칸=+b.dataset.k; 상점열기(); });
 document.getElementById("bshop").onclick=()=>{ if(mode) return; (panel.hidden||패널종류!=="shop") ? 상점열기() : (panel.hidden=true); };
 items.addEventListener("click",e=>{
   const catEl=e.target.closest(".it[data-cat]");
@@ -982,6 +1005,7 @@ function draw(){
   const 끝 = 열린끝();
   maxX = Math.max(0, Math.min(lwT - W, 끝*lw - W*0.65));    // 열린 구역 끝에서 화면 1/3쯤 더 — 잠긴 땅이 어둡게 보여야 「저기가 다음」임을 안다
   const pad = W*(1-1/ZOOM)/2;                              // 확대하면 화면 밖 양옆이 그만큼 더 보인다
+  if(ready && !첫화면잡음){ 첫화면잡음=true; camX = (.556+.645)/2*lw - W/2; }   // 처음 열면 상점·창고가 가운데 (대표님 9/16: 「첫 화면은 창고하고 상점」)
   camX = Math.max(-pad, Math.min(maxX+pad, camX));
   flipBtn.hidden = !mode || !!mode.building || !!mode.cat; document.getElementById("cancel").hidden = !mode;
   document.getElementById("tostore").hidden = !mode || !!mode.building || !!mode.cat;
