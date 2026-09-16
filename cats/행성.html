@@ -63,6 +63,24 @@
   #rotate{position:absolute;inset:0;background:#07061af2;color:#fff;display:none;align-items:center;justify-content:center;
     text-align:center;font-size:18px;line-height:1.6;padding:24px;z-index:50;pointer-events:auto}
   @media (orientation:portrait) and (max-width:900px){ #rotate{display:flex} }
+  /* 처음 소개 (대표님 9/16: 「맨 처음 열면 이게 무슨 게임인지 모를 것 같아」) */
+  #intro{position:absolute;inset:0;background:#07061ae6;display:flex;align-items:center;justify-content:center;z-index:60;pointer-events:auto}
+  #intro[hidden]{display:none}
+  #intro .card{width:min(92vw,640px);max-height:92vh;overflow:auto;padding:28px 30px 24px;border-radius:24px;background:#0f0d24;
+    border:1px solid #ffffff22;box-shadow:0 30px 80px #000c;color:#fff}
+  #intro h1{margin:0 0 4px;font-size:30px;letter-spacing:-.02em}
+  #intro .lead{margin:0 0 16px;font-size:14px;opacity:.75;line-height:1.5}
+  #intro .cats{display:flex;gap:10px;justify-content:center;margin:6px 0 14px}
+  #intro .cats img{height:92px;object-fit:contain}
+  #intro .cats div{text-align:center;font-size:12px;opacity:.85}
+  #intro ol{margin:0;padding:0;list-style:none;display:grid;gap:9px}
+  #intro li{display:flex;gap:12px;align-items:flex-start;font-size:15px;line-height:1.45}
+  #intro li > b{font-size:22px;width:30px;text-align:center;flex:none}
+  #intro li span b{color:#ffd36e}
+  #intro .go{margin:18px auto 0;display:block;background:#ffd36e;color:#3b2a00;border:0;border-radius:999px;padding:13px 30px;font-weight:800;font-size:16px;cursor:pointer}
+  #intro small{display:block;text-align:center;opacity:.55;font-size:12px;margin-top:8px}
+  #bhelp{position:absolute;left:14px;top:52px;width:34px;height:34px;border-radius:999px;background:#ffffff1c;color:#fff;border:1px solid #ffffff2b;
+    font-weight:800;cursor:pointer;pointer-events:auto}
   #panel{position:absolute;left:0;right:0;bottom:0;max-height:46vh;background:#0f0d24f2;
     border-top:1px solid #ffffff2a;border-radius:18px 18px 0 0;padding:12px 14px 16px;
     pointer-events:auto;overflow:auto}
@@ -90,6 +108,21 @@
 </style>
 <div id="wrap">
   <canvas id="cv"></canvas>
+  <button id="bhelp" title="이 게임은?">?</button>
+  <div id="intro" hidden><div class="card">
+    <h1>🐾 그르릉 행성</h1>
+    <p class="lead">민이·망치·문대가 사는 작은 행성이에요. 냥이들을 돌보고, 행성을 꾸미고, 가족을 늘려 가는 게임이에요.</p>
+    <div class="cats"><div><img src="cut/민이.png" alt=""><br>민이</div><div><img src="cut/망치.png" alt=""><br>망치</div><div><img src="cut/문대.png" alt=""><br>문대</div></div>
+    <ol>
+      <li><b>🐱</b><span>냥이를 <b>톡</b> 누르면 부비고, 아래 <b>이름</b>을 누르면 걸어와서 박치기해요. 끌면 자리를 옮겨요.</span></li>
+      <li><b>🧩</b><span><b>놀이</b>에서 화살표 퍼즐을 깨면 <b>코인</b>을 벌어요. 금빛 화살표를 내보내면 냥이가 축하하러 와요.</span></li>
+      <li><b>🛒</b><span>코인으로 <b>상점</b>에서 나무·잔디·집을 사서 땅에 놓아요. 놓인 건 끌어서 옮기고, 톡 누르면 뒤집혀요.</span></li>
+      <li><b>🍡</b><span>츄르를 들고 냥이 <b>얼굴에 대면</b> 핥아 먹어요. 🏠 입양과 💞 새끼 낳기로 가족이 늘어요.</span></li>
+      <li><b>🔒</b><span>코인이 모이면 <b>다음 구역</b>을 열어 행성이 옆으로 넓어져요. 폰은 <b>가로</b>로 잡아 주세요.</span></li>
+    </ol>
+    <button class="go" id="introGo">시작할게요 🐾</button>
+    <small>이 안내는 왼쪽 위 「?」로 언제든 다시 볼 수 있어요</small>
+  </div></div>
   <div id="rotate"><div><div style="font-size:40px">📱↻</div>폰을 <b>가로로</b> 돌려 주세요<br><small style="opacity:.7">그르릉 행성은 옆으로 넓은 세계예요</small></div></div>
   <div class="hud top">
     <span class="pill" id="coin">🪙 <b>0</b></span>
@@ -744,6 +777,14 @@ addEventListener("storage",e=>{ if(e.key===TOWN_KEY) 코인갱신(); });
    주소 뒤에 ?장인 을 붙여 한 번 열면 코인 100,000 이 채워진다. 딸들에겐 알려주지 말 것 😺 */
 try{ if(/[?&]장인|[?&]%EC%9E%A5%EC%9D%B8|[?&]maker/.test(location.search)){ const t=마을읽기(); t.coin=100000; 마을쓰기(t); setTimeout(()=>안내("🛠 장인 모드 — 코인 100,000 채웠어요"), 800); history.replaceState(null,"",location.pathname); } }catch(e){}
 코인갱신();
+/* 처음 소개 — 처음 한 번만. 「?」로 다시 */
+const intro=document.getElementById("intro");
+function 소개열기(){ intro.hidden=false; }
+function 소개닫기(){ intro.hidden=true; try{ localStorage.setItem("그르릉_소개","1"); }catch(e){} }
+document.getElementById("introGo").onclick=소개닫기;
+document.getElementById("bhelp").onclick=소개열기;
+intro.addEventListener("click",e=>{ if(e.target===intro) 소개닫기(); });
+try{ if(!localStorage.getItem("그르릉_소개")) 소개열기(); }catch(e){ 소개열기(); }
 const puzzle=document.getElementById("puzzle"), pxframe=document.getElementById("pxframe");
 let puzzleOpenedAt=0;
 function 퍼즐열기(){ if(mode) return; panel.hidden=true; pxframe.src="../arrows/index.html"; puzzle.hidden=false; puzzleOpenedAt=performance.now(); hide(); }
