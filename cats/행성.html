@@ -399,8 +399,8 @@ const BUILDINGS=[ { n:"상점", im:load("소품/상점_그림자.png"), u:.556, 
      누르면 창고가 열린다(원래와 같음). 놓기 규칙엔 관여하지 않는다(창고몸통 규칙이 이미 있다). */
   { n:"창고선명", im:load("소품/창고_선명.png"), u:.645, v:.903, 크기:4.5, 바닥:0.878, 장식:true, 열기:()=>창고열기() },
 ];
-const 건물옮기기=false;   // 못 박았다. 다시 옮기고 싶으면 true — 꾹 눌러 끌기가 살아난다
-if(건물옮기기){ try{ const bt=(마을읽기().buildings)||{}; for(const b of BUILDINGS){ if(bt[b.n]){ b.u=bt[b.n].u; b.v=bt[b.n].v; } } }catch(e){} }
+let 건물옮기기=false; try{ 건물옮기기=!!마을읽기().maker; }catch(e){}   // 못 박았다. 장인 주소(?maker)로 열면 창고 선명판만 꾹 눌러 끌 수 있다 (대표님 9/16: 「창고 조금 더 옮기면 맞을 것 같은데」)
+if(건물옮기기){ try{ const bt=(마을읽기().buildings)||{}; for(const b of BUILDINGS){ if(bt[b.n] && b.n==="창고선명"){ b.u=bt[b.n].u; b.v=bt[b.n].v; } } }catch(e){} }
 function 건물저장(){ const t=마을읽기(); t.buildings=t.buildings||{}; for(const b of BUILDINGS) t.buildings[b.n]={u:b.u,v:b.v}; 마을쓰기(t); }
 const 건물찾기=(x,y)=>BUILDINGS.find(b=>!b.held && b._box && x>=b._box.x && x<=b._box.x+b._box.w && y>=b._box.y && y<=b._box.y+b._box.h);
 /* 대표님(9/16): 창고 나무 옆에 세우려는데 「창고 자리」 규칙에 막혔다 → 「자리만 풀어줘」.
@@ -717,7 +717,7 @@ function 놓기끝(x,y){
     const b=mode.building;
     if(!건물놓을수있나(b,u,v)){ 안내("여기엔 못 세워요 — 밝은 띠 안의 빈 땅에 세워 주세요 (그만두려면 ✕)"); mode.bad=performance.now(); return; }
     b.u=u; b.v=v; b.held=false; 건물저장(); mode=null; cv.style.cursor="grab";
-    안내(b.n+" 자리를 옮겼어요. 마음에 드는 자리가 정해지면 놀대리에게 말씀해 주세요 — 기본 자리로 못 박아 드려요"); return;
+    안내("창고 자리 u "+u.toFixed(3)+" · v "+v.toFixed(3)+" — 마음에 들면 이 숫자를 놀대리에게 알려 주세요, 못 박아 드려요"); return;
   }
   if(mode.n.startsWith("츄르") && 얼굴위냥이(x,y)){
     if(mode.from) PROPSET.push(mode.from);           // 땅에서 들고 온 츄르는 원래 자리로
@@ -758,12 +758,12 @@ cv.addEventListener("pointerdown",e=>{
   if(mode){ mode.x=X; mode.y=Y; return; }
   const hit=소품찾기(X,Y);
   pressed={x:X,y:Y,hit,moved:false,cat:냥이찾기(X,Y)};
-  const bld = 건물옮기기 && hit<0 && !pressed.cat ? 건물찾기(X,Y) : null;
+  let bld = 건물옮기기 && hit<0 && !pressed.cat ? 건물찾기(X,Y) : null; if(bld && bld.n!=="창고선명") bld=null;   // 상점은 못 박은 대로
   if(bld){                                                // 건물: 0.5초 꾹 누르면 들린다 (톡은 열기)
     pressed.building=bld;
     pressed.timer=setTimeout(()=>{ if(!pressed||pressed.moved||pressed.building!==bld) return;
       bld.held=true; mode={n:bld.n, building:bld, from:null, x:pressed.x, y:pressed.y, x0:pressed.x, y0:pressed.y, fresh:true, f:1}; cv.style.cursor="crosshair";
-      drag=null; cv.classList.remove("drag"); 안내("상점을 들었어요 — 밝은 띠 안에 세워 주세요"); }, 500);
+      drag=null; cv.classList.remove("drag"); 안내("창고를 들었어요 — 놓고 싶은 자리에 톡 놓으세요 (조금씩: 놓은 뒤 다시 꾹 눌러 끌기)"); }, 500);
   }
   if(hit<0){ drag={x:X, c:camX}; cv.classList.add("drag"); }
 });
@@ -836,7 +836,7 @@ function 코인갱신(){
 addEventListener("storage",e=>{ if(e.key===TOWN_KEY) 코인갱신(); });
 /* 장인 주소 — 만드는 사람(대표님)은 코인을 벌 필요가 없다(9/16: 「포인트가 없어서 소품을 뺄 수가 없어」).
    주소 뒤에 ?장인 을 붙여 한 번 열면 코인 100,000 이 채워진다. 딸들에겐 알려주지 말 것 😺 */
-try{ if(/[?&]장인|[?&]%EC%9E%A5%EC%9D%B8|[?&]maker/.test(location.search)){ const t=마을읽기(); t.coin=100000; t.maker=true; 마을쓰기(t); setTimeout(()=>안내("🛠 장인 모드 — 코인 100,000 채웠어요"), 800); history.replaceState(null,"",location.pathname); } }catch(e){}
+try{ if(/[?&]장인|[?&]%EC%9E%A5%EC%9D%B8|[?&]maker/.test(location.search)){ const t=마을읽기(); t.coin=100000; t.maker=true; 마을쓰기(t); 건물옮기기=true; setTimeout(()=>안내("🛠 장인 모드 — 코인 100,000 채웠어요"), 800); history.replaceState(null,"",location.pathname); } }catch(e){}
 코인갱신();
 /* 처음 소개 — 처음 한 번만. 「?」로 다시 */
 const intro=document.getElementById("intro");
