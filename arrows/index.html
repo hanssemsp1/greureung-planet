@@ -1,0 +1,719 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>화살표 탈출 — 자동 생성 시험판</title>
+<style>
+  html,body{margin:0;height:100%;background:#13132b;overflow:hidden;
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;}
+  #wrap{position:fixed;inset:0;display:grid;place-items:center;}
+  canvas{display:block;touch-action:none;}
+</style>
+<div id="wrap"><canvas id="cv"></canvas></div>
+<script>
+/* ───────────────────────────────────────────────────────────────
+   화살표 탈출 — 레벨 자동 생성 시험판
+   규칙: 화살표를 누르면 머리 방향으로 판을 빠져나간다.
+         머리 앞부터 판 끝까지가 비어 있어야 한다. 막히면 목숨 -1.
+   생성: 빈 판에 「지금 길이 뚫린 자리」에만 하나씩 놓는다.
+         → 놓은 순서를 뒤집으면 그게 정답. 못 푸는 판이 안 나온다.
+   ─────────────────────────────────────────────────────────────── */
+
+const W = 540, H = 960;
+let C = 6, R = 8, S = 54, OX = 27, OY = 168;   // 판은 레벨에 따라 커진다
+
+// 난이도는 「막힘 비율」만으로는 안 오른다. 판이 커져야 눈으로 훑을 거리가 늘어난다.
+const BOARD = [[1,6,8],[8,7,10],[25,8,11],[60,9,13],[120,10,14],[200,11,16],[320,12,17]];
+function setBoard(lv){
+  let c = 6, r = 8;
+  for (const [l, cc, rr] of BOARD) if (lv >= l){ c = cc; r = rr; }
+  C = c; R = r;
+  S  = Math.min(Math.floor(492 / C), Math.floor(664 / R));
+  OX = Math.round((W - C*S) / 2);
+  OY = 168 + Math.max(0, Math.round((664 - R*S) / 2));
+}
+
+const cv = document.getElementById("cv"), cx = cv.getContext("2d");
+let scale = 1;
+function fit(){
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  scale = Math.min(innerWidth / W, innerHeight / H);
+  cv.style.width = (W*scale)+"px"; cv.style.height = (H*scale)+"px";
+  cv.width = Math.round(W*scale*dpr); cv.height = Math.round(H*scale*dpr);
+  cx.setTransform(scale*dpr, 0, 0, scale*dpr, 0, 0);
+}
+addEventListener("resize", fit); fit();
+
+const DIR = { up:[-1,0], down:[1,0], left:[0,-1], right:[0,1] };
+const DIRS = ["up","down","left","right"];
+const inb = (r,c) => r>=0 && r<R && c>=0 && c<C;
+const shuffle = a => { for(let i=a.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[a[i],a[j]]=[a[j],a[i]];} return a; };
+
+/* ── 소리 (파일 없이 합성) ──────────────────────────────────── */
+let ac = null;
+function A(){
+  if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+  if (ac.state === "suspended") ac.resume();
+  return ac;
+}
+function beep(f, d, type, v, delay){
+  try{
+    const c = A(), t = c.currentTime + (delay || 0);
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type || "sine"; o.frequency.setValueAtTime(f, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(v || 0.18, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g); g.connect(c.destination);
+    o.start(t); o.stop(t + d + 0.03);
+  } catch(e){}
+}
+
+/* ── 생성 ───────────────────────────────────────────────────── */
+function emptyGrid(){ return Array.from({length:R}, () => new Array(C).fill(-1)); }
+
+function rayCells(g, head, dir, ignore){
+  const [dr,dc] = DIR[dir];
+  let r = head[0]+dr, c = head[1]+dc;
+  const out = [];
+  while (inb(r,c)){
+    const v = g[r][c];
+    if (v >= 0 && v !== ignore) return null;      // 막혔다
+    out.push([r,c]); r += dr; c += dc;
+  }
+  return out;
+}
+
+/* 새 화살표를 놓을 때, 이미 놓인 것들의 길을 「최대한 많이 막는」 자리를 고른다.
+   막힌 화살표는 이 새 화살표가 나간 뒤에야 나갈 수 있다 → 순서가 강제된다 = 난이도.
+   그래도 새 화살표 자신의 길은 뚫려 있으므로 풀리는 건 그대로 보장된다. */
+function place(g, id, maxLen, placed, greed, minRay){
+  const open = [];
+  for (const p of placed){
+    const ray = rayCells(g, p.cells[0], p.dir, p.id);
+    if (ray) open.push(new Set(ray.map(([r,c]) => r*C+c)));
+  }
+  // 몸통이 지나가면 좋은 칸 = 지금 뚫려 있는 남의 길. 여기로 몸을 끌고 가야 「막는」 화살표가 된다 (9/16)
+  const openCells = new Set(); for (const s of open) for (const k of s) openCells.add(k);
+  const heads = [];
+  for (let r=0;r<R;r++) for (let c=0;c<C;c++) if (g[r][c] < 0) heads.push([r,c]);
+  shuffle(heads);
+
+  let best = null, bestSc = -1, tried = 0;
+  outer:
+  for (const head of heads){
+    for (const dir of shuffle(DIRS.slice())){
+      const ray = rayCells(g, head, dir);
+      if (!ray) continue;                          // 지금 못 나가는 자리엔 안 놓는다
+      /* 🔴 길이 0~1 인 자리(가장자리에서 바로 바깥을 보는 머리)는 아무도 못 막는다 → 처음부터 늘 나갈 수 있는 화살표가 된다.
+         이게 「첫수 50%」의 원인이었다(9/16). 나중에 놓이는 놈이 막을 수 있게 길이 최소 minRay 칸은 있어야 한다. */
+      if (ray.length < (minRay||0)) continue;
+      const block = new Set(ray.map(([r,c]) => r*C+c));
+      const cells = [head]; const used = new Set([head[0]*C+head[1]]);
+      const len = 1 + ((Math.random()*maxLen)|0);
+      let cur = head;
+      for (let i=1;i<len;i++){
+        const opts = shuffle(DIRS.slice()).map(d => [cur[0]+DIR[d][0], cur[1]+DIR[d][1]])
+          .filter(([r,c]) => inb(r,c) && g[r][c]<0 && !used.has(r*C+c) && !block.has(r*C+c));
+        if (!opts.length) break;
+        // 남의 길 위를 지나는 쪽을 먼저 고른다 — 몸통으로 길을 막아야 순서가 강제된다
+        const onOpen = opts.filter(([r,c]) => openCells.has(r*C+c));
+        cur = (onOpen.length && Math.random() < 0.85) ? onOpen[0] : opts[0];
+        cells.push(cur); used.add(cur[0]*C+cur[1]);
+      }
+      const keys = cells.map(([r,c]) => r*C+c);
+      let sc = 0;
+      for (const s of open) if (keys.some(k => s.has(k))) sc++;
+      sc = sc * 10 + cells.length;                 // 같은 값이면 긴 쪽 — 길수록 많이 막는다
+      if (sc > bestSc){ bestSc = sc; best = { cells, dir, id }; }
+      if (++tried >= greed) break outer;
+    }
+  }
+  if (!best) return null;                          // 더 놓을 자리가 없다
+  for (const [r,c] of best.cells) g[r][c] = id;
+  return best;
+}
+
+/* ── 난이도 곡선 — 레벨 하나가 어떤 판인지 숫자로 ─────────────────
+   fill  = 판의 몇 %를 화살표로 채우나 (빽빽할수록 어렵다)
+   lenMax= 화살표 최대 길이(칸)         greed = 남의 길을 얼마나 악랄하게 막는 자리를 고르나
+   target= 목표 막힘률(1 − 언제든 나갈 수 있는 비율). 레퍼런스 하드 판은 .7~.85 쯤이다   */
+/* 대표님(9/16): 「쉬운 단계라도 어려운 퍼즐 두세 개는 있어야 하는데 이건 너무 쉬워. 하기가 싫어져」.
+   재 보니 옛 곡선은 레벨 1 에서 화살표 16개·처음부터 나갈 수 있는 화살표가 절반이었다.
+   레퍼런스(레벨 223 하드)는 판이 빽빽하고 화살표가 길어서 「나갈 수 있는 놈」을 찾는 것 자체가 일이다.
+   → 처음부터 8×11 판을 긴 화살표로 채우고(막힘률 70%대), 10레벨마다 3·6·9 번째는 「하드」로 한 단계 더 올린다.
+   레벨 10·20·… 은 타임 도전.                                                                       */
+const 하드판 = lv => [3, 6, 9].includes(lv % 10);
+/* 9/16 실측(레벨 1, 판 3개씩 평균): 옛 곡선 화살표 16·막힘 40%·첫수 50% → 새 곡선 화살표 28·막힘 80%·첫수 20%.
+   열쇠는 minRay 3(가장자리 바로 바깥을 보는 못 막는 화살표 금지)와 pad(남는 자리는 짧은 길로 마저 채움)였다.
+   화살표 길이는 4가 제일 어렵다(길수록 화살표 수가 줄어 오히려 쉬워진다).                            */
+/* 대표님(9/16): 「한 판에 하나씩 하자, 처음 거는 너무 쉬우니까」
+   → 화살표가 레벨마다 하나씩 는다. 레벨 1 = 30개. 판은 그 수가 들어가는 가장 작은 판을 고른다
+     (판 용량 ≈ 칸 수 × 0.85 ÷ 3). 하드 판은 +4개, 길이 +1. 판은 최대 14×20(레퍼런스 하드 판 크기).      */
+const BOARDS = [[6,8],[7,10],[8,11],[9,13],[10,14],[11,16],[12,17],[13,18],[14,20]];
+const 용량 = ([c,r]) => Math.floor(c * r * 0.85 / 3.3);   // 실측: /3 은 낙관적이라 판이 want 를 못 채웠다
+function 곡선(lv){
+  /* 대표님(9/16): 「내가 너무 내 수준에 맞췄나 봐. 1단계가 저 정도면 매우 어려운 건데」
+     → 처음 10판은 초보 구간: 12개에서 시작해 두 개씩 늘어 레벨 10에 30개. 그 뒤는 한 판에 하나씩. */
+  const hard = 하드판(lv);
+  const want = (lv <= 10 ? 10 + lv * 2 : 30 + (lv - 10)) + (hard ? 4 : 0);
+  let bi = BOARDS.findIndex(b => 용량(b) >= want); if (bi < 0) bi = BOARDS.length - 1;
+  const [C0, R0] = BOARDS[bi];
+  return { C: C0, R: R0, fill: 0.9, cap: want, lenMax: 4 + (hard ? 1 : 0),
+           greed: hard ? 200 : 120, minRay: 3, pad: true,
+           target: Math.min(0.90, (hard ? 0.86 : 0.80) + lv * 0.0005), tries: hard ? 12 : 10, hard };
+}
+function buildOnce(lv, P){
+  const want   = Math.round(Math.min(C * R * P.fill, P.cap));   // 판 넓이 안에서 레벨만큼
+  const maxLen = P.lenMax;
+  const greed  = P.greed;
+  let best = null;
+  for (let attempt = 0; attempt < 6; attempt++){
+    const g = emptyGrid(); const ps = [];
+    let minRay = P.minRay || 0;
+    for (let i=0;i<want;i++){
+      const p = place(g, ps.length, maxLen, ps, greed, minRay);
+      if (!p){
+        // 막을 수 있는 자리가 다 찼다. pad 가 켜져 있으면 짧은 길(1칸)도 허용해 판을 마저 채운다 —
+        // 이 놈들은 늦게 놓이니 「처음에 나갈 수 있는」 쪽이 된다. 빽빽함과 첫수 사이의 저울이다.
+        if (P.pad && minRay > 1){ minRay = 1; i--; continue; }
+        break;
+      }
+      ps.push(p);
+    }
+    if (!best || ps.length > best.length) best = ps;
+    if (best.length >= want) break;
+  }
+  return (best && best.length >= 4) ? best.reverse() : null;  // 놓은 역순 = 정답 순서
+}
+
+/* 뽑고 나서 재본다. 목표 난이도에 못 미치면 버리고 다시 뽑는다.
+   판이 커질 때마다 헐거워지는 걸 이걸로 잡는다 — 곡선이 내려가지 않게. */
+/* ── 난이도 시작점 ──────────────────────────────────────────────
+   대표님(9/16): 「지금 쉬워도 너무 쉬운데… 광고도 안 붙고 물방울도 금빛으로 금방 채워지니
+   처음부터 난이도를 올렸으면」. 레퍼런스 게임은 광고·결제 때문에 초반을 헐겁게 두지만 우리는 그럴 이유가 없다.
+   → 레벨 1 을 옛 레벨 13 에서 시작한다(7×10 판, 화살표 15개, 막힘률 40% 안팎). 곡선 모양은 그대로.  */
+const 시작난이도 = 0;    // 곡선 자체를 다시 짰으니 옮길 필요가 없다(9/16)
+/* ── 타임 도전 ──────────────────────────────────────────────────
+   대표님(9/16): 「무조건 다 깨면 안 되니까, 중간중간 게임타임 도전하기가 있었어. 성공하면 선물」.
+   10레벨마다 한 번 시간 안에 깨야 한다(대표님: 「타임도전은 10레벨마다 한번하자」). 성공 = 코인 3배 선물. 실패해도 목숨은 안 깎인다 —
+   다시 도전하거나 건너뛴다(패배감으로 붙잡지 않는다, 타운쉽 7년의 교훈).                      */
+const 도전주기 = 10;
+const 도전시간 = n => Math.round(8 + n * 2.0);          // 화살표 하나에 2초 + 여유 8초
+function build(lv){
+  lv += 시작난이도;
+  setBoard(lv);
+  const P = (window.__P && window.__P(lv)) || 곡선(lv);      // __P 는 검사용 덮어쓰기
+  if (P.C){ C = P.C; R = P.R; S = Math.min(Math.floor(492 / C), Math.floor(664 / R)); OX = Math.round((W - C*S) / 2); OY = 168 + Math.max(0, Math.round((664 - R*S) / 2)); }
+  const target = P.target;
+  let best = null, bestErr = 9;
+  for (let k = 0; k < (P.tries || 10); k++){
+    const ps = buildOnce(lv, P);
+    if (!ps) continue;
+    const a = analyze(ps);
+    if (!a) continue;                                    // 못 푸는 판이면 즉시 버린다
+    const err = (a.hard >= target ? (a.hard - target) * 0.3 : (target - a.hard)) + Math.abs(a.pieces - P.cap) * 0.02;   // 개수도 맞춘다(한 판에 하나씩)
+    if (err < bestErr){ bestErr = err; best = ps; best.info = a; }
+    if (bestErr < 0.03) break;
+  }
+  return best;
+}
+
+/* ── 검사(난이도) ───────────────────────────────────────────── */
+function analyze(ps){
+  const g = emptyGrid();
+  ps.forEach((p,i) => p.cells.forEach(([r,c]) => g[r][c] = i));
+  let left = ps.map((_,i) => i), ratios = [], maxRay = 0, step = 0;
+  const freeAt = new Array(ps.length).fill(0);     // 몇 번째 수에야 길이 뚫리는가 = 깊이
+  const frees  = new Array(ps.length).fill(0);     // 이 화살표가 나가면 몇 개가 새로 뚫리는가 (열쇠 고르기용)
+  let prev = -1;
+  while (left.length){
+    const ok = left.filter(i => rayCells(g, ps[i].cells[0], ps[i].dir, i));
+    if (!ok.length) return null;                   // 못 푸는 판 — 나오면 안 된다
+    let fresh = 0;
+    for (const i of ok) if (!freeAt[i]){ freeAt[i] = step; fresh++; }
+    if (prev >= 0) frees[prev] = fresh;
+    step++;
+    ratios.push(ok.length / left.length);
+    const pick = ok[0];
+    const ray = rayCells(g, ps[pick].cells[0], ps[pick].dir, pick);
+    maxRay = Math.max(maxRay, ray.length);
+    ps[pick].cells.forEach(([r,c]) => g[r][c] = -1);
+    left = left.filter(i => i !== pick);
+    prev = pick;
+  }
+  const avg = ratios.reduce((a,b)=>a+b,0) / ratios.length;
+  const cells = ps.reduce((n,p) => n + p.cells.length, 0);
+  return { pieces: ps.length, avgValid: avg, hard: 1 - avg, maxRay, freeAt, frees,
+           open0: ratios[0], depth: Math.max(...freeAt), fill: cells / (C*R) };
+}
+
+/* ── 상태 ───────────────────────────────────────────────────── */
+const SAVE = "nyangi_arrows_v1";
+const save = Object.assign({ lv:1, cleared:0 }, JSON.parse(localStorage.getItem(SAVE) || "{}"));
+const flush = () => localStorage.setItem(SAVE, JSON.stringify(save));
+/* 곡선을 통째로 바꿨다(9/16). 옛 곡선에서 올린 레벨(쉬웠던 33판)은 새 곡선에선 뜻이 없으니 한 번만 1로 되돌린다.
+   대표님 크롬이 레벨 34 에서 계속 시작하던 문제. 코인은 건드리지 않는다. */
+const 곡선판 = 3;
+if (save.curve !== 곡선판){ save.lv = 1; save.curve = 곡선판; flush(); }
+
+let pieces = [], grid = emptyGrid(), drops = 3, done = false, dead = false;
+let bad = null, shake = 0, hint = null, info = null, msg = null, parts = [], earned = 0;
+let timed = false, timeLeft = 0, timeTotal = 0, timeout = false, cheer = 0, lastTick = 0;
+let cateye = { n: 0, at: -99 };                         // 고양이 눈: 이번 판에 몇 번, 마지막이 몇 수째였나
+/* ── 이어서 하기 (대표님 9/16: 「한 번에 성공을 못하면 코인을 추가해서 방울을 사는 거지」) ──
+   목숨을 다 쓰면 코인으로 물방울 3개를 사서 그 판을 이어간다. 값은 같은 판에서 살 때마다 두 배(100→200→400).
+   코인은 마을 지갑(nyangi_town_v1.coin)에서 빠진다. 안 사면 아무 곳이나 눌러 새 판.                        */
+let 이어값 = 100;
+const 지갑 = () => { try{ return JSON.parse(localStorage.getItem("nyangi_town_v1") || "{}"); }catch(e){ return {}; } };
+function 이어하기(){
+  const t = 지갑(); const coin = t.coin|0;
+  if (coin < 이어값){ say("코인 " + (이어값-coin) + " 모자라요", THEME.bad); beep(190, 0.2, "sawtooth", 0.15); return; }
+  t.coin = coin - 이어값; localStorage.setItem("nyangi_town_v1", JSON.stringify(t));
+  drops = 3; dead = false; bad = null; 이어값 *= 2;
+  say("물방울 +3", "#7fc3ff"); beep(660, 0.18, "triangle", 0.15); beep(880, 0.2, "triangle", 0.14, 0.12);
+}
+const cateyeMove = () => pieces.filter(p => p.out).length;   // 지금까지 내보낸 수
+
+function load(lv){
+  const ps = build(lv);
+  if (!ps){ save.lv = 1; return load(1); }
+  info = ps.info;
+  pieces = ps.map((p,i) => ({ ...p, id:i, out:0, gold:false }));
+  grid = emptyGrid();
+  pieces.forEach((p,i) => p.cells.forEach(([r,c]) => grid[r][c] = i));
+
+  // 금빛 화살 3개 — 「깊은 곳」에 심는다. 늦게야 길이 뚫리는 놈들이라 거저 못 먹는다.
+  const order = info.freeAt.map((v,i) => [v,i]).sort((a,b) => a[0]-b[0]);
+  const n = order.length;
+  const spots = new Set();
+  for (const f of [0.55, 0.76, 0.93]){
+    let k = Math.min(n-1, Math.floor(n*f));
+    while (k > 0 && spots.has(order[k][1])) k--;
+    if (n >= 6) spots.add(order[k][1]);
+  }
+  spots.forEach(i => pieces[i].gold = true);
+
+  /* ── 열쇠 화살표 (대표님, 9/16) ─────────────────────────────────
+     「어려운 걸 해결했을 때 같이 사라지는 화살표는 3개만. 한 판에 하나, 가장 어려울 것 같은 화살표에.
+      아주 어려운 판에만 두 개」.
+     → 제일 깊은 곳(제일 늦게야 길이 뚫리는) 화살표 하나를 열쇠로 삼는다. 하드 판은 둘.
+       열쇠를 내보내면 그것이 풀어주는 화살표 2개까지 같이 나간다(합쳐 3개). 다른 화살표는 사슬이 없다.
+       겉으로는 표시하지 않는다 — 깊은 곳을 뚫었을 때 받는 놀람이다.                                  */
+  const keyN = 하드판(lv) ? 2 : 1;
+  /* ⚠️ 「제일 깊은 것」만 고르면 마지막에 남는 화살표라 같이 나갈 놈이 없다(9/16 실측). 
+     나가면 2개 이상을 풀어주는 화살표 중에서 제일 깊은 것을 고른다. */
+  /* 열쇠가 나가면 열쇠가 바로 막고 있던 화살표 2개가 같이 사라진다(풀리는 게 아니라 같이 나간다 — 상이다).
+     그래서 열쇠는 「남의 길을 2개 이상 막고 있는」 것 중 제일 깊은 것으로 고른다. */
+  const cand = pieces.map(p => [blockedBy(p.id, false).length, info.freeAt[p.id], ray0(p), p.id]).filter(x => !pieces[x[3]].gold && x[0] >= 1)
+    .sort((a,b) => Math.min(b[0],2) - Math.min(a[0],2) || b[1]-a[1] || b[2]-a[2]);
+  cand.slice(0, keyN).forEach(x => pieces[x[3]].key = true);
+
+  drops = 3; done = false; dead = false; bad = null; hint = null; msg = null; parts = [];
+  timed = (lv % 도전주기 === 0); timeout = false; cheer = 0;
+  cateye = { n: 0, at: -99 }; 이어값 = 100;
+  timeTotal = timeLeft = timed ? 도전시간(pieces.length) : 0;
+}
+load(save.lv);
+
+function alive(){ return pieces.filter(p => p.out === 0); }
+/* keyId 의 몸통이 길을 바로 막고 있는(첫 장애물이 keyId 인) 살아 있는 화살표들 */
+/* strict=true 면 첫 장애물이 keyId 인 것만, false 면 길 어딘가에 keyId 몸통이 걸쳐 있으면 전부.
+   깊은 화살표는 사방이 막혀 있어 「첫 장애물」로는 잘 안 잡힌다 → 느슨한 쪽으로 고르고, 같이 나갈 2개는 첫 장애물인 놈부터. */
+function blockedBy(keyId, strict){
+  const out = [];
+  for (const q of pieces){
+    if (q.out || q.id === keyId) continue;
+    const [dr,dc] = DIR[q.dir]; let r = q.cells[0][0]+dr, c = q.cells[0][1]+dc;
+    while (inb(r,c)){ const v = grid[r][c];
+      if (v >= 0 && v !== q.id){ if (v === keyId){ out.push(q.id); break; } if (strict) break; }
+      r += dr; c += dc; }
+  }
+  return out;
+}
+function keyChain(keyId){
+  const strict = blockedBy(keyId, true), loose = blockedBy(keyId, false).filter(i => !strict.includes(i));
+  return strict.concat(loose).filter(i => !pieces[i].key).slice(0, 2);   // 다른 열쇠는 데려가지 않는다(하드 판의 두 번째 놀람을 지킨다)
+}
+function ray0(p){ const [dr,dc] = DIR[p.dir]; let r = p.cells[0][0]+dr, c = p.cells[0][1]+dc, n = 0; while (inb(r,c)){ n++; r += dr; c += dc; } return n; }
+function ray(p){ return rayCells(grid, p.cells[0], p.dir, p.id); }
+
+function tappable(){
+  const s = new Set();
+  for (const p of pieces) if (!p.out && ray(p)) s.add(p.id);
+  return s;
+}
+function say(text, col){ msg = { text, col, t:0 }; }
+function burst(p, col, n){
+  const [hr,hc] = p.cells[0];
+  for (let i=0;i<n;i++){
+    const a = Math.random()*6.283, s = 70 + Math.random()*220;
+    parts.push({ x:cxp(hc), y:cyp(hr), vx:Math.cos(a)*s, vy:Math.sin(a)*s - 40, life:1, col });
+  }
+}
+
+/* 도미노: 이 화살이 풀어준 놈 → 그놈이 풀어준 놈 → … 얼마나 이어지는지 먼저 「재보고」 되돌린다.
+   한 번에 여러 개가 풀리는 일은 2%도 안 되지만, 하나가 하나를 푸는 건 56% — 그래서 사슬이 답이다. */
+function domino(before, cap){
+  const sg = grid.map(r => r.slice()), so = pieces.map(q => q.out);
+  const rm = [];
+  let fr = [...tappable()].filter(x => !before.has(x));
+  while (fr.length && rm.length < cap){
+    const b2 = tappable();
+    const q = pieces[fr.shift()];
+    if (q.out) continue;
+    q.out = 1; q.cells.forEach(([r,c]) => grid[r][c] = -1);
+    rm.push(q.id);
+    fr.push(...[...tappable()].filter(x => !b2.has(x) && x !== q.id));
+  }
+  grid = sg; pieces.forEach((q,i) => q.out = so[i]);   // 재보기만 했으니 되돌린다
+  return rm;
+}
+
+function tap(r, c){
+  if (timeout) return;
+  if (done || dead) { next(); return; }
+  const id = grid[r] && grid[r][c];
+  if (id === undefined || id < 0) return;
+  const p = pieces[id];
+  if (p.out) return;
+  const path = ray(p);
+
+  if (!path){
+    // 막힌 칸을 찾아 보여준다 — 왜 틀렸는지 알아야 다음에 는다
+    const [dr,dc] = DIR[p.dir];
+    let rr = p.cells[0][0]+dr, cc = p.cells[0][1]+dc, stop = null;
+    while (inb(rr,cc)){ if (grid[rr][cc] >= 0 && grid[rr][cc] !== p.id){ stop = [rr,cc]; break; } rr+=dr; cc+=dc; }
+    bad = { p, stop, t:0 }; shake = 1; drops--;
+    beep(190, 0.28, "sawtooth", 0.20);
+    if (drops <= 0) dead = true;
+    return;
+  }
+
+  const before = tappable();                        // 지금 뚫려 있던 것들
+  const line = p.key ? keyChain(p.id) : [];         // 열쇠가 막고 있던 놈 2개까지 같이 나간다 (합쳐 3개)
+  p.out = 1; p.t = 0;
+  p.cells.forEach(([rr,cc]) => grid[rr][cc] = -1);
+  hint = null;
+  beep(640, 0.12, "triangle", 0.14);
+
+  let gained = 0;
+  if (p.gold){ gained++; burst(p, GOLD, 20); 냥이등장(p);
+    [0,1,2].forEach(i => beep(520 * Math.pow(2, i/6), 0.17, "triangle", 0.16, i*0.08)); }
+
+  const perfect = p.key && line.length >= 1;        // 열쇠 화살표만 사슬. 다른 화살표는 사슬이 없다
+
+  if (perfect){
+    burst(p, THEME.perfect, 26);
+    line.forEach((fid, i) => {
+      const q = pieces[fid];
+      q.out = 1; q.t = -(0.12 + i*0.16);            // 줄줄이 터져나간다
+      q.cells.forEach(([rr,cc]) => grid[rr][cc] = -1);
+      if (q.gold){ gained++; if (!cameo) 냥이등장(q); }
+      beep(523 * Math.pow(2, i/12), 0.16, "triangle", 0.14, 0.12 + i*0.16);
+    });
+  }
+
+  for (let i=0;i<gained;i++) if (drops < 3) drops++;   // 물방울은 최대 3개 (대표님 9/16: 「물방울 수는 3개만 하자」)
+
+  if (perfect)          say(gained ? "퍼펙트 ×" + (line.length+1) + "  물방울 +" + gained
+                                   : "퍼펙트 ×" + (line.length+1), THEME.perfect);
+  else if (gained)      say("물방울 +" + gained, GOLD);
+  // 고양이 눈 = 정말 찾기 어려웠던 수에만. 대표님(9/16): 「할 때마다가 아니라 어려운 거 했을 때만 나와야지」
+  //   → 나갈 수 있는 화살표가 남은 것의 8% 이하(30개 중 2개꼴)이면서 길이 8칸 이상이었을 때. 그리고 한 판에 최대 3번, 5수 간격.
+  else if (before.size <= Math.max(1, Math.round(alive().length * 0.08)) && path.length >= 8
+           && cateye.n < 3 && cateye.at - cateyeMove() >= 5){
+    cateye.n++; cateye.at = cateyeMove();
+    say("고양이 눈", THEME.hint);
+    beep(880, 0.10, "sine", 0.14); beep(1175, 0.15, "sine", 0.13, 0.09);
+  }
+
+  if (!alive().length){
+    done = true;
+    // 마을에서 쓸 코인 — 레벨이 높을수록, 목숨이 남을수록 많이
+    earned = Math.round((40 + save.lv * 1.6) * (1 + (drops-1) * 0.18));
+    if (timed){ earned *= 3; cheer = 2.4; [0,1,2,3].forEach(i => beep(660 * Math.pow(2, i/5), 0.2, "triangle", 0.15, 0.25 + i*0.11)); }
+    const town = JSON.parse(localStorage.getItem("nyangi_town_v1") || "{}");
+    town.coin = (town.coin || 0) + earned;
+    town.owned = town.owned || []; town.seen = town.seen || [];
+    localStorage.setItem("nyangi_town_v1", JSON.stringify(town));
+    save.lv++; save.cleared++; flush();
+    beep(700, 0.5, "triangle", 0.18, 0.2);
+  }
+}
+function next(){ if (dead) load(save.lv); else load(save.lv); }
+
+/* ── 입력 ───────────────────────────────────────────────────── */
+cv.addEventListener("pointerdown", e => {
+  e.preventDefault();
+  const b = cv.getBoundingClientRect();
+  const x = (e.clientX - b.left)/scale, y = (e.clientY - b.top)/scale;
+  if (timeout){ if (y > 560){ save.lv++; flush(); } load(save.lv); return; }
+  if (y < 150){
+    if (x > W-110){ const v = alive().find(p => ray(p)); if (v) hint = { p:v, t:0 }; }
+    else if (x < 120 && y < 90 && confirm("레벨 1부터 다시 시작할까요? (코인은 그대로예요)")){ save.lv = 1; flush(); load(1); }
+    return;
+  }
+  if (dead && !done){ if (y > 462 && y < 534) 이어하기(); else next(); return; }
+  const c = Math.floor((x - OX)/S), r = Math.floor((y - OY)/S);
+  if (inb(r,c)) tap(r,c);
+  else if (done || dead) next();
+});
+
+/* ── 그리기 ─────────────────────────────────────────────────── */
+/* ── 팔레트 ────────────────────────────────────────────────────
+   대표님(9/16): 「배경색도 화살표도 고급스러워야」. 퍼즐이 행성(밤하늘) 위에 카드로 뜨니
+   카드도 같은 밤으로 — 깊은 남색 바탕에 상아색 화살표, 금빛은 진짜 금 그라데이션.
+   크림 테마(레퍼런스와 같은 톤)는 THEMES.크림 으로 남겨 두었다. THEME 만 바꾸면 된다.  */
+const THEMES = {
+  밤:  { bg0:"#1b1a3f", bg1:"#0f0f26", arrow:"#ece3cf", arrowLo:"#c9bea4", dot:"rgba(236,227,207,.16)",
+         gold:"#f3cf6b", goldLo:"#b8862c", title:"#f1e9d6", sub:"#b9a7e6", meta:"rgba(236,227,207,.55)",
+         drop:"#7fc3ff", dropOff:"rgba(236,227,207,.18)", bad:"#ff6b5e", hint:"#c9a8ff", perfect:"#7fe3ee",
+         panel:"rgba(19,19,43,.92)", panelText:"#f1e9d6" },
+  크림: { bg0:"#f3ece0", bg1:"#e8dfcd", arrow:"#16a4b4", arrowLo:"#0f7d89", dot:"#d9cdb6",
+         gold:"#e8b64a", goldLo:"#b47f1c", title:"#8a6a3a", sub:"#9b7bc7", meta:"#b09a78",
+         drop:"#4aa8e0", dropOff:"#cdbfa8", bad:"#e2574c", hint:"#9b7bc7", perfect:"#16a4b4",
+         panel:"rgba(239,231,216,.92)", panelText:"#8a6a3a" },
+};
+const THEME = THEMES.밤;
+const TEAL = THEME.arrow, GOLD = THEME.gold, DOT = THEME.dot;
+
+/* ── 냥이 ────────────────────────────────────────────────────────
+   카드 아래에 민이·망치·문대가 작게 앉아 숨 쉰다. 금빛 화살표를 내보내면
+   한 아이가 판 가장자리에서 앞발을 들고 「톡」 치듯 나타나 ♥ 를 준다(대표님 안, 9/16).  */
+const CATIMG = {};
+const cimg = p => { if (!CATIMG[p]){ const i = new Image(); i.src = p; CATIMG[p] = i; } return CATIMG[p]; };
+const CATS = ["민이","망치","문대"].map((n,i) => ({ n, sit: cimg("../cats/cut/"+n+".png"), paw: cimg("../cats/자세/"+n+"_앞발들기.png"), ph: i*2.1 }));
+let cameo = null;                      // { cat, x, y, face, t, hearts:[] }
+const ok = im => im && im.complete && im.naturalWidth;
+function 냥이등장(p){
+  const cat = CATS[(Math.random()*CATS.length)|0];
+  const [dr,dc] = DIR[p.dir];
+  const [hr,hc] = p.cells[0];
+  // 화살이 빠져나가는 가장자리, 그 자리 바로 바깥에서 나타난다
+  let x, y, face = 1;
+  if (dc){ x = dc > 0 ? OX + C*S + 46 : OX - 46; y = cyp(hr); face = dc > 0 ? -1 : 1; }
+  else   { x = cxp(hc); y = dr > 0 ? OY + R*S + 52 : OY - 52; face = hc < C/2 ? 1 : -1; }
+  x = Math.max(56, Math.min(W-56, x));
+  cameo = { cat, x, y, face, t: 0, hearts: [] };
+}
+function drawCameo(dt){
+  if (!cameo) return;
+  cameo.t += dt;
+  const a = cameo.t < .25 ? cameo.t/.25 : cameo.t > 1.5 ? Math.max(0, 1-(cameo.t-1.5)/.35) : 1;
+  if (a <= 0){ cameo = null; return; }
+  const pop = cameo.t < .25 ? 0.6 + 0.4*ease(cameo.t/.25) : 1;
+  const im = ok(cameo.cat.paw) ? cameo.cat.paw : cameo.cat.sit;
+  if (!ok(im)) return;
+  const h = 118*pop, w = h*im.naturalWidth/im.naturalHeight;
+  const bob = Math.sin(cameo.t*11)*3*(cameo.t < 1.1 ? 1 : 0);       // 앞발로 톡톡
+  cx.save(); cx.globalAlpha = a;
+  cx.translate(cameo.x, cameo.y + bob); if (cameo.face < 0) cx.scale(-1,1);
+  cx.drawImage(im, -w/2, -h/2, w, h);
+  cx.restore();
+  if (cameo.t > .35 && cameo.hearts.length < 2 && (cameo.hearts.length === 0 || cameo.t - cameo.hearts[cameo.hearts.length-1].t0 > .45))
+    cameo.hearts.push({ t0: cameo.t, dx: (Math.random()-.5)*30 });
+  for (const hh of cameo.hearts){
+    const ha = cameo.t - hh.t0; if (ha > 1.2) continue;
+    cx.save(); cx.globalAlpha = Math.max(0, 1-ha/1.2) * a; cx.fillStyle = "#ff8fa3";
+    cx.font = "800 26px sans-serif"; cx.textAlign = "center";
+    cx.fillText("♥", cameo.x + hh.dx, cameo.y - 62 - ha*40); cx.restore();
+  }
+}
+function drawSitters(t){
+  // 판 아래 남는 자리에 셋이 나란히 앉아 있다. 숨 쉬듯 아주 조금 늘었다 줄었다.
+  // 타임 도전에 성공하면 셋이 통통 뛰며 ♥ 를 날린다(cheer).
+  const base = Math.min(H - 22, OY + R*S + 120);
+  CATS.forEach((c,i) => {
+    if (!ok(c.sit)) return;
+    const b = 1 + Math.sin(t*1.6 + c.ph)*.012;
+    const hop = cheer > 0 ? Math.abs(Math.sin(t*9 + i)) * 18 : 0;
+    const h = 92*b, w = h*c.sit.naturalWidth/c.sit.naturalHeight;
+    const x = W/2 + (i-1)*150;
+    cx.save(); cx.globalAlpha = cameo && cameo.cat === c ? .35 : .95;
+    cx.drawImage(c.sit, x - w/2, base - h - hop, w, h); cx.restore();
+    if (cheer > 0){
+      const k = (2.4 - cheer);
+      cx.save(); cx.globalAlpha = Math.max(0, 1 - (k % 0.8)/0.8); cx.fillStyle = "#ff8fa3";
+      cx.font = "800 24px sans-serif"; cx.textAlign = "center";
+      cx.fillText("♥", x + Math.sin(t*3+i)*12, base - h - 18 - (k % 0.8)*50); cx.restore();
+    }
+  });
+}
+const cxp = c => OX + c*S + S/2, cyp = r => OY + r*S + S/2;
+
+function drawPiece(p, col, alpha){
+  const [dr,dc] = DIR[p.dir];
+  const off = p.out ? ease(p.t) * (S * (R + C)) : 0;
+  cx.save(); cx.globalAlpha = alpha === undefined ? 1 : alpha;
+  cx.translate(dc*off, dr*off);
+  // 금빛은 진짜 금 — 위는 밝고 아래는 짙은 그라데이션. 나머지도 위아래 두 톤으로 「입체」가 생긴다
+  const lo = col === GOLD ? THEME.goldLo : col === TEAL ? THEME.arrowLo : col;
+  const g = cx.createLinearGradient(0, OY, 0, OY + R*S); g.addColorStop(0, col); g.addColorStop(1, lo);
+  cx.shadowColor = "rgba(0,0,0,.45)"; cx.shadowBlur = S*0.22; cx.shadowOffsetY = S*0.07;
+  cx.strokeStyle = g; cx.lineWidth = S*0.40;
+  cx.lineJoin = "round"; cx.lineCap = "round";
+  cx.beginPath();
+  for (let i = p.cells.length-1; i >= 0; i--){
+    const [r,c] = p.cells[i];
+    i === p.cells.length-1 ? cx.moveTo(cxp(c), cyp(r)) : cx.lineTo(cxp(c), cyp(r));
+  }
+  cx.stroke();
+  // 화살촉
+  const [hr,hc] = p.cells[0];
+  const x = cxp(hc) + dc*S*0.30, y = cyp(hr) + dr*S*0.30, a = S*0.30;
+  cx.fillStyle = g; cx.beginPath();
+  cx.moveTo(x + dc*a, y + dr*a);
+  cx.lineTo(x - dc*a + dr*a*0.95, y - dr*a + dc*a*0.95);
+  cx.lineTo(x - dc*a - dr*a*0.95, y - dr*a - dc*a*0.95);
+  cx.closePath(); cx.fill();
+  if (col === GOLD){ cx.shadowColor = "rgba(243,207,107,.8)"; cx.shadowBlur = S*0.5; cx.shadowOffsetY = 0; cx.fill(); }  // 금빛은 은은히 빛난다
+  cx.restore();
+}
+const ease = t => { t = Math.max(0, Math.min(1, t)); return 1 - Math.pow(1-t, 3); };
+
+function drop(x, y, filled){
+  cx.beginPath();
+  cx.moveTo(x, y-14);
+  cx.bezierCurveTo(x+13, y+1, x+11, y+13, x, y+13);
+  cx.bezierCurveTo(x-11, y+13, x-13, y+1, x, y-14);
+  cx.fillStyle = filled ? THEME.drop : THEME.dropOff; cx.fill();
+}
+
+function draw(dt){
+  const bg = cx.createRadialGradient(W/2, H*0.38, 40, W/2, H*0.5, H*0.75);
+  bg.addColorStop(0, THEME.bg0); bg.addColorStop(1, THEME.bg1);
+  cx.fillStyle = bg; cx.fillRect(0,0,W,H);
+  cx.save();
+  if (shake > 0){ cx.translate((Math.random()-.5)*shake*10, (Math.random()-.5)*shake*10); shake = Math.max(0, shake - dt*4); }
+
+  // 머리
+  cx.textAlign = "center"; cx.fillStyle = THEME.title; cx.font = "800 30px sans-serif";
+  cx.fillText("레벨 " + save.lv, W/2, 52);
+  cx.fillStyle = timed ? GOLD : THEME.sub; cx.font = "700 17px sans-serif";
+  cx.fillStyle = timed ? GOLD : 하드판(save.lv) ? THEME.bad : THEME.sub;
+  cx.fillText(timed ? "⏱ 타임 도전" : 하드판(save.lv) ? "🔥 하드" : "노멀", W/2, 76);
+  if (timed){
+    if (!done && !dead && !timeout){
+      timeLeft = Math.max(0, timeLeft - dt);
+      if (timeLeft <= 10 && Math.floor(timeLeft) !== lastTick){ lastTick = Math.floor(timeLeft); beep(1040, 0.05, "square", 0.05); }
+      if (timeLeft <= 0){ timeout = true; beep(160, 0.6, "sawtooth", 0.18); }
+    }
+    const frac = timeTotal ? timeLeft / timeTotal : 0, urgent = timeLeft <= 10 && !done;
+    cx.fillStyle = "rgba(255,255,255,.10)"; cx.beginPath(); cx.roundRect(190, 96, W-380, 8, 4); cx.fill();   // 오른쪽 글자와 안 겹치게 짧게
+    cx.fillStyle = urgent ? THEME.bad : GOLD; cx.beginPath(); cx.roundRect(190, 96, (W-380)*frac, 8, 4); cx.fill();
+    cx.textAlign = "center"; cx.fillStyle = urgent ? THEME.bad : THEME.title; cx.font = "800 22px sans-serif";
+    cx.fillText(Math.ceil(timeLeft) + "초", W/2, 132);
+  }
+  const slots = Math.max(3, drops);
+  for (let i=0;i<slots;i++) drop(40 + i*34, 122, i < drops);
+  cx.textAlign = "right"; cx.fillStyle = THEME.meta; cx.font = "700 15px sans-serif";
+  const goldLeft = pieces.filter(p => p.gold && !p.out).length;
+  if (info) cx.fillText("화살표 " + alive().length + " · 막힘 " + Math.round(info.hard*100) + "%", W-30, 106);
+  cx.fillStyle = GOLD; cx.fillText("금빛 " + goldLeft + " 개 남음", W-30, 126);
+  cx.textAlign = "center"; cx.fillStyle = THEME.meta; cx.font = "700 14px sans-serif";
+  cx.fillText("힌트", W-62, 140);
+  cx.textAlign = "left"; cx.fillText("↺ 처음부터", 30, 56);   // 왼쪽 위 — 레벨 1부터 다시(코인은 그대로)
+  drawSitters(performance.now()/1000);
+
+  // 점 격자
+  cx.fillStyle = DOT;
+  for (let r=0;r<R;r++) for (let c=0;c<C;c++){
+    cx.beginPath(); cx.arc(cxp(c), cyp(r), 2.4, 0, 7); cx.fill();
+  }
+
+  for (const p of pieces){
+    if (p.out){ p.t += dt*1.7; if (p.t > 1.3) continue; }
+    let col = p.gold ? GOLD : TEAL;
+    if (bad && bad.p === p) col = THEME.bad;
+    if (hint && hint.p === p) col = THEME.hint;
+    drawPiece(p, col);
+  }
+  if (bad){
+    bad.t += dt;
+    if (bad.stop){
+      cx.strokeStyle = THEME.bad; cx.lineWidth = 4;
+      cx.beginPath(); cx.arc(cxp(bad.stop[1]), cyp(bad.stop[0]), S*0.40, 0, 7); cx.stroke();
+    }
+    if (bad.t > 1.1) bad = null;
+  }
+  if (hint){ hint.t += dt; if (hint.t > 1.6) hint = null; }
+
+  // 튀는 조각
+  for (const q of parts){
+    q.x += q.vx*dt; q.y += q.vy*dt; q.vy += 700*dt; q.life -= dt*1.5;
+    if (q.life <= 0) continue;
+    cx.globalAlpha = Math.max(0, q.life); cx.fillStyle = q.col;
+    cx.beginPath(); cx.arc(q.x, q.y, 5*q.life + 1.5, 0, 7); cx.fill();
+  }
+  cx.globalAlpha = 1;
+  parts = parts.filter(q => q.life > 0);
+  drawCameo(dt);
+  if (cheer > 0) cheer -= dt;
+  if (timeout){
+    cx.fillStyle = THEME.panel; cx.fillRect(0, 380, W, 240);
+    cx.textAlign = "center";
+    cx.fillStyle = THEME.bad; cx.font = "800 40px sans-serif"; cx.fillText("시간 초과", W/2, 452);
+    cx.fillStyle = THEME.panelText; cx.font = "700 19px sans-serif";
+    cx.fillText("아무 곳이나 눌러 다시 도전", W/2, 500);
+    cx.fillStyle = THEME.meta; cx.font = "700 16px sans-serif";
+    cx.fillText("아래쪽을 누르면 건너뛰기 (선물은 없어요)", W/2, 590);
+  }
+
+  // 문구
+  if (msg){
+    msg.t += dt;
+    const a = msg.t < 0.12 ? msg.t/0.12 : Math.max(0, 1 - (msg.t-0.9)/0.5);
+    if (a <= 0) msg = null;
+    else {
+      const y = OY + R*S*0.44 - msg.t*26;
+      cx.globalAlpha = a;
+      cx.font = "800 42px sans-serif"; cx.textAlign = "center";
+      const w = cx.measureText(msg.text).width + 56;
+      cx.fillStyle = THEME.panel;
+      cx.beginPath(); cx.roundRect(W/2 - w/2, y - 42, w, 62, 31); cx.fill();
+      cx.strokeStyle = msg.col; cx.lineWidth = 2.5; cx.stroke();
+      cx.fillStyle = msg.col; cx.fillText(msg.text, W/2, y);
+      cx.globalAlpha = 1;
+    }
+  }
+
+  if (done || dead){
+    cx.fillStyle = THEME.panel; cx.fillRect(0, 380, W, 200);
+    cx.textAlign = "center";
+    cx.fillStyle = done ? THEME.perfect : THEME.bad; cx.font = "800 40px sans-serif";
+    cx.fillText(done ? "클리어!" : "목숨을 다 썼습니다", W/2, 452);
+    if (done){
+      cx.fillStyle = GOLD; cx.font = "800 24px sans-serif";
+      cx.fillText((timed ? "🎁 타임 도전 성공! 선물 " : "◈ ") + earned + " 코인", W/2, 490);
+      cx.fillStyle = THEME.panelText; cx.font = "700 16px sans-serif";
+      cx.fillText("마을에서 아기냥 밥과 집을 만들 수 있습니다", W/2, 516);
+      cx.fillText("아무 곳이나 눌러 다음 레벨", W/2, 540);
+    } else {
+      const coin = 지갑().coin|0, can = coin >= 이어값;
+      cx.fillStyle = can ? GOLD : "rgba(255,255,255,.12)";
+      cx.beginPath(); cx.roundRect(W/2-170, 468, 340, 60, 30); cx.fill();
+      cx.fillStyle = can ? "#3b2a00" : THEME.meta; cx.font = "800 20px sans-serif";
+      cx.fillText("🪙 " + 이어값 + "으로 물방울 3개 · 이어서", W/2, 506);
+      cx.fillStyle = THEME.meta; cx.font = "700 15px sans-serif";
+      cx.fillText(can ? "지금 🪙 " + coin.toLocaleString() + " · 다른 곳을 누르면 새 판" : "코인이 모자라요 · 다른 곳을 누르면 새 판", W/2, 556);
+    }
+  }
+  cx.restore();
+}
+let last = performance.now();
+(function loop(ts){ const dt = Math.min(.05,(ts-last)/1000); last = ts; draw(dt); requestAnimationFrame(loop); })(last);
+
+/* 검사용 — 콘솔에서 window.__test(200) */
+window.__test = n => {
+  const out = [];
+  for (let lv=1; lv<=n; lv++){
+    const ps = build(lv);
+    if (!ps) { out.push({lv, fail:"생성실패"}); continue; }
+    const a = ps.info || analyze(ps);
+    if (!a) { out.push({lv, fail:"풀리지않음"}); continue; }
+    out.push({ lv, board:C+"x"+R, pieces:a.pieces, hard:+(a.hard).toFixed(3), maxRay:a.maxRay, open0:+a.open0.toFixed(2), depth:a.depth, fill:+a.fill.toFixed(2) });
+  }
+  return out;
+};
+</script>

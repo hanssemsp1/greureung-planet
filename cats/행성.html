@@ -1,0 +1,1088 @@
+<!doctype html><html lang="ko"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>그르릉 행성 — 옆으로 미는 마을</title>
+<style>
+  html,body{margin:0;height:100%;background:#07061a;overflow:hidden;
+    font:14px/1.5 "Pretendard","Malgun Gothic",sans-serif;color:#fff;
+    -webkit-user-select:none;user-select:none;touch-action:none}
+  #wrap{position:relative;width:100vw;height:100vh}
+  canvas{display:block;width:100%;height:100%;cursor:grab}
+  canvas.drag{cursor:grabbing}
+  .hud{position:absolute;pointer-events:none}
+  .hud.top{top:0;left:0;right:0;padding:10px 14px;
+    background:linear-gradient(#07061acc,transparent)}
+  .pill{display:inline-block;background:#ffffff1c;border:1px solid #ffffff2b;
+    border-radius:999px;padding:4px 12px;margin-right:6px;font-size:12px}
+  #bar{position:absolute;left:14px;right:14px;bottom:14px;height:5px;
+    background:#ffffff22;border-radius:99px;pointer-events:none}
+  #knob{position:absolute;top:0;height:5px;background:#ffd36e;border-radius:99px}
+  #hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    background:#000000a8;padding:10px 18px;border-radius:12px;font-size:13px;
+    pointer-events:none;transition:opacity .6s}
+  #bstore{position:absolute;right:14px;bottom:30px;background:#ffd36e;color:#3b2a00;border:0;
+    border-radius:14px;padding:10px 14px;font-weight:700;font-size:13px;cursor:pointer;pointer-events:auto}
+  #names{position:absolute;left:14px;bottom:30px;display:flex;gap:6px;pointer-events:auto}
+  #names button{background:#ffffff1c;color:#fff;border:1px solid #ffffff2b;border-radius:999px;
+    padding:9px 14px;font-weight:700;font-size:13px;cursor:pointer;backdrop-filter:blur(4px)}
+  #names button:hover{background:#ffffff30}
+  #names button.on{background:#ffd36e;color:#3b2a00;border-color:#ffd36e}
+  #zoom{position:absolute;right:14px;top:52px;display:flex;flex-direction:column;gap:6px;pointer-events:auto}
+  #zoom button{width:38px;height:38px;border-radius:999px;background:#ffffff1c;color:#fff;border:1px solid #ffffff2b;
+    font-size:20px;font-weight:700;cursor:pointer;backdrop-filter:blur(4px)}
+  #zoom button:hover{background:#ffffff30}
+  #flip{position:absolute;left:50%;transform:translateX(-50%);bottom:30px;background:#ffd36e;color:#3b2a00;border:0;
+    border-radius:999px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;pointer-events:auto;box-shadow:0 6px 20px #0008}
+  #flip[hidden]{display:none}
+  #cancel{position:absolute;left:50%;transform:translateX(70px);bottom:30px;background:#ffffff1c;color:#fff;border:1px solid #ffffff2b;
+    border-radius:999px;padding:10px 14px;font-weight:700;font-size:13px;cursor:pointer;pointer-events:auto;backdrop-filter:blur(4px)}
+  #cancel[hidden]{display:none}
+  #tostore{position:absolute;left:50%;transform:translateX(-190px);bottom:30px;background:#ffffff1c;color:#fff;border:1px solid #ffffff2b;
+    border-radius:999px;padding:10px 14px;font-weight:700;font-size:13px;cursor:pointer;pointer-events:auto;backdrop-filter:blur(4px)}
+  #tostore[hidden]{display:none}
+  #zone{position:absolute;right:14px;top:50%;transform:translateY(-50%);background:#0f0d24e6;color:#ffd36e;border:1px solid #ffd36e66;
+    border-radius:16px;padding:12px 16px;font-weight:800;font-size:14px;cursor:pointer;pointer-events:auto;box-shadow:0 10px 30px #0009;
+    text-align:center;line-height:1.35}
+  #zone small{display:block;color:#fff;opacity:.7;font-weight:600;font-size:11px}
+  #zone[hidden]{display:none}
+  #bshop{position:absolute;right:196px;bottom:30px;background:#ffffff1c;color:#fff;border:1px solid #ffffff2b;
+    border-radius:14px;padding:10px 14px;font-weight:700;font-size:13px;cursor:pointer;pointer-events:auto;backdrop-filter:blur(4px)}
+  #bshop:hover{background:#ffffff30}
+  #bplay{position:absolute;right:112px;bottom:30px;background:#ffffff1c;color:#fff;border:1px solid #ffffff2b;
+    border-radius:14px;padding:10px 14px;font-weight:700;font-size:13px;cursor:pointer;pointer-events:auto;backdrop-filter:blur(4px)}
+  #bplay:hover{background:#ffffff30}
+  #coin.bump{animation:bump .5s ease-out}
+  @keyframes bump{0%{transform:scale(1)}35%{transform:scale(1.35);background:#ffd36e;color:#3b2a00}100%{transform:scale(1)}}
+  #puzzle{position:absolute;inset:0;background:#07061ab8;display:flex;align-items:center;justify-content:center;pointer-events:auto}
+  #puzzle[hidden]{display:none}   /* display:flex 가 hidden 속성을 이겨서 늘 떠 있던 사고(9/16) — 닫혀 있으면 정말 사라지게 */
+  #puzzle .card{position:relative;height:92vh;aspect-ratio:540/960;max-width:94vw;border-radius:22px;overflow:hidden;
+    box-shadow:0 30px 80px #000c;background:#efe7d8}
+  #puzzle iframe{width:100%;height:100%;border:0;display:block}
+  #pxclose{position:absolute;top:10px;right:10px;background:#3b2a00cc;color:#fff;border:0;border-radius:999px;
+    width:34px;height:34px;font-size:16px;cursor:pointer}
+  /* 폰을 세로로 들면 안내 (9/16 — 딸들 폰 플레이) */
+  #rotate{position:absolute;inset:0;background:#07061af2;color:#fff;display:none;align-items:center;justify-content:center;
+    text-align:center;font-size:18px;line-height:1.6;padding:24px;z-index:50;pointer-events:auto}
+  @media (orientation:portrait) and (max-width:900px){ #rotate{display:flex} }
+  #panel{position:absolute;left:0;right:0;bottom:0;max-height:46vh;background:#0f0d24f2;
+    border-top:1px solid #ffffff2a;border-radius:18px 18px 0 0;padding:12px 14px 16px;
+    pointer-events:auto;overflow:auto}
+  #panel h3{margin:0 0 8px;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+  #panel h3 button{background:#ffffff1f;color:#fff;border:0;border-radius:10px;padding:5px 10px;cursor:pointer}
+  #ptabs .tab{margin-right:4px;opacity:.6}
+  #ptabs .tab.on{background:#ffd36e;color:#3b2a00;opacity:1}
+  #ptitle{opacity:.8;font-weight:500;margin-left:4px}
+  .it.cat{min-width:96px}
+  .it .sub{display:block;font-size:10px;opacity:.7;margin-top:1px}
+  .it .mood{display:block;font-size:11px;color:#ff8fa3;letter-spacing:1px}
+  .it.adopt img{border-radius:10px}
+  #items{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px}
+  .it{background:#ffffff12;border:1px solid #ffffff22;border-radius:12px;padding:6px 4px 4px;
+    text-align:center;cursor:pointer;font-size:11px}
+  .it:hover{background:#ffffff22}
+  .it img{width:64px;height:64px;object-fit:contain;display:block;margin:0 auto 2px}
+  .it.none{opacity:.35;cursor:default}
+  .it .price{display:block;font-size:10px;color:#ffd36e;margin-top:1px}
+  .it.shop.poor{opacity:.5}
+  .it.shop.poor .price{color:#ff8f8f}
+  #items .sec{grid-column:1/-1;font-size:12px;opacity:.65;margin:4px 0 -2px;letter-spacing:.02em}
+  #items.shake{animation:shake .35s}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+</style>
+<div id="wrap">
+  <canvas id="cv"></canvas>
+  <div id="rotate">📱↻<br>폰을 <b>가로로</b> 돌려 주세요<br><small style="opacity:.7">그르릉 행성은 옆으로 넓은 세계예요</small></div>
+  <div class="hud top">
+    <span class="pill" id="coin">🪙 <b>0</b></span>
+    <span class="pill" id="zonename">그르릉 행성 · 창고 구역</span>
+    <span class="pill" id="pos">—</span>
+  </div>
+  <div id="hint">손가락으로(또는 마우스로) 옆으로 밀어 보세요</div>
+  <div id="bar"><div id="knob"></div></div>
+  <div id="zoom"><button id="zin" title="확대">＋</button><button id="zout" title="축소">－</button></div>
+  <button id="flip" hidden>↔ 뒤집기</button>
+  <button id="cancel" hidden>✕ 그만</button>
+  <button id="tostore" hidden>📦 창고에 넣기</button>
+  <div id="names"><button id="bcats" data-cats="1">🐾 냥이</button><button data-n="민이">민이</button><button data-n="망치">망치</button><button data-n="문대">문대</button></div>
+  <button id="zone" hidden></button>
+  <button id="bshop">🛒 상점</button>
+  <button id="bplay">🧩 놀이</button>
+  <button id="bstore">📦 창고</button>
+  <div id="puzzle" hidden><div class="card"><iframe id="pxframe" title="화살표 퍼즐"></iframe><button id="pxclose">✕</button></div></div>
+  <div id="panel" hidden>
+    <h3><span><span id="ptabs"><button id="tabStore" class="tab">📦 창고</button><button id="tabShop" class="tab">🛒 상점</button><button id="tabCats" class="tab">🐾 냥이</button><button id="tabAdopt" class="tab">🏠 입양</button></span> <span id="ptitle">꺼낼 것을 고르세요</span></span><button id="pclose">닫기</button></h3>
+    <div id="items"></div>
+  </div>
+</div>
+<script>
+/* ─────────────────────────────────────────────────────────────
+   그르릉 행성 — 가로 화면, 옆으로 미는 마을
+
+   🔴 구조가 핵심이다. 두 겹으로 나눠 놓았다.
+     하늘 = 영상(움직인다) · 땅 = 그림(안 움직인다)
+
+   왜 이렇게 하나:
+     땅은 끝없이 넓어진다(outpaint). 그런데 영상은 한 화면치밖에 못 만든다.
+     그래서 땅을 영상으로 만들면 넓힐 때마다 영상을 새로 뽑아야 한다.
+     하늘만 영상으로 두면 — 땅을 아무리 넓혀도 영상은 그대로 한 편이면 된다.
+     게다가 땅은 어차피 「정지해 있어야」 한다(풀이 자라면 안 되니까).
+
+   그리고 하늘이 땅보다 천천히 움직인다(패럴랙스). 그래야 깊이가 생긴다.
+   ───────────────────────────────────────────────────────────── */
+
+const cv=document.getElementById("cv"), cx=cv.getContext("2d");
+let W=0,H=0;
+function fit(){
+  const d=Math.min(devicePixelRatio||1,2);
+  W=cv.clientWidth; H=cv.clientHeight;
+  cv.width=W*d; cv.height=H*d; cx.setTransform(d,0,0,d,0,0);
+}
+addEventListener("resize",fit);
+
+/* 땅 — 넓힌 그림. 위쪽은 투명해서 하늘 영상이 비쳐 보인다. */
+const LAND=new Image(); LAND.src="배경/땅.png";
+/* 하늘 — 20초 무한 루프 */
+const SKY=document.createElement("video");
+SKY.src="배경/하늘.mp4"; SKY.muted=true; SKY.loop=true;
+SKY.playsInline=true; SKY.autoplay=true;
+SKY.addEventListener("canplay",()=>SKY.play().catch(()=>{}));
+
+const SKY_PARALLAX=.40;          // 하늘은 땅의 40%만 따라온다
+
+/* ── 냥이 ────────────────────────────────────────────────────
+   🔴 크기는 「몇 픽셀」로 못 정한다. 원근으로 정해진다.
+   지평선에 가까울수록 작고, 화면 아래(가까이)일수록 크다.
+   그래서 x,y 만 정해주면 크기는 저절로 나온다.                 */
+const HORIZON=.41;               // 땅 그림에서 지평선이 있는 높이(41%)
+const CAT_AT_HOUSE=70;           // 원근의 기준값 — 여기에 아래 big 이 곱해진다
+/* 🔴 성묘 1.3 · 아기 0.55 — 대표님이 셋을 나란히 보고 고르심(2026-09-14).
+   기준은 「냥이가 창고 문으로 들어갈 수 있어 보이는가」. 집은 냥이 집이니까. */
+const 성묘=1.3, 아기=.55;
+const load=s=>{const i=new Image(); i.src=s; return i;};
+const CATS=[
+  /* 창고는 u .49~.66 에 있고 바닥이 v .88 이다. 그보다 v 가 크면 창고 앞에 선다. */
+  /* ⚠️ 사진마다 「어깨가 그림 높이의 몇 %인가」가 달라서, 그냥 같은 크기로 그리면
+     망치만 작아 보인다(대표님: 「가만히 있는거에서 망치가 덩치가 좀더 들어가야해」).
+     0.970 / 1.032 / 0.999 는 그 차이를 메우는 보정값이다. */
+  {n:"민이", f:"민이",     u:.425, v:.885, big:성묘*.970},   // 창고 왼쪽 옆
+  {n:"망치", f:"망치",     u:.725, v:.885, big:성묘*1.032},  // 창고 오른쪽 옆
+  {n:"문대", f:"문대",     u:.575, v:.955, big:성묘*.999},   // 창고 바로 앞(그래서 더 크다)
+  {n:"삼색이",f:"04_삼색이",u:.475, v:.935, big:아기},
+  {n:"치즈", f:null, src:"cut/06_치즈.png", u:.33, v:.80,  big:아기},  // 자세 그림이 아직 없다
+  {n:"블루", f:null, src:"cut/08_블루.png", u:.24, v:.855, big:아기},
+];
+
+/* ── 냥이가 하는 것 ──────────────────────────────────────────
+   🔴 대표님이 고쳐주신 뜻을 그대로 지킨다.
+     · 우다다  = 놀아줘서가 아니라 **기분이 좋아지면 스스로** 뛰어다니는 것
+     · 박치기  = 「봐달라」는 뜻. 고양이가 **먼저** 다가와서 한다
+     · 사냥자세 = 한껏 움츠렸다가 → **뛰어오르기**로 이어진다 (두 자세가 한 동작)
+     · 꾹꾹이  = 편안할 때. 고개를 숙이고 앞발을 번갈아 누른다              */
+const 쉼   = ["식빵","엎드리기","서기"];
+const 잠   = ["웅크려자기","뻗어자기","식빵"];
+const 심심 = ["그루밍","하품","기지개","창밖보기","앞발들기","배보이기","꾹꾹이"];
+const 기본 = "서기";
+const pick = a => a[(Math.random()*a.length)|0];
+
+/* ── 걷기는 사진이 아니라 「연속 그림」이다 ─────────────────────
+   🔴 힉스필드로 뽑은 걷기 영상에서 다리가 한 바퀴 도는 구간만 잘라
+   투명 PNG 로 펼쳐 놓았다(동작/이름_걷기/00.png…). 그걸 순서대로 넘긴다.
+
+   ⚠️ 영상 속 냥이는 **제자리걸음**이다. 앞으로 나아가는 건 코드가 한다.
+      그래서 거리·속도·방향을 마음대로 정할 수 있고 5초 제한도 없다.
+   ⚠️ 발이 미끄러지지 않으려면 「걸음 한 바퀴에 몸길이만큼」 나가야 한다.
+      대표님이 고른 속도는 느긋한 쪽이다 — 빠르면 부산스럽다.        */
+/* 🔴 크기는 「어깨높이(등~발끝)」로 맞춘다. 꼬리로 맞추면 안 된다 —
+   냥이마다 꼬리를 드는 높이가 달라서, 꼬리 긴 문대는 몸이 작아지고
+   꼬리 낮은 망치는 몸이 커진다(대표님: 「망치가 무슨 큰애완견 같아」).
+
+   배율 = 앉은 사진의 어깨몫 ÷ 걷는 그림의 어깨몫.
+   이걸 곱해야 걷다가 앉아도 같은 덩치로 보인다.
+
+   ⚠️ 구간을 고를 땐 「몸이 길쭉하지 않은가」도 봐야 한다. 망치의 첫 구간은
+      가로가 어깨의 2.01배라 하이에나처럼 보였다(대표님 지적). 앉은 자세가 1.17 이니
+      1.0~1.4 가 정상이다.
+   🔴 그리고 **한 걸음 주기는 0.7초보다 길어야 한다**(17프레임 이상).
+      짧게 자르면 반 주기만 담겨서 **한쪽 발만 움직인다**(대표님: 「망치 한쪽발만 움직여」).
+      앞발 쪽·뒷발 쪽을 갈라서 둘 다 움직이는지 재고 고를 것.            */
+/* ══════════════════════════════════════════════════════════════
+   🔴🔴 2026-09-14 대표님 확정. 여기 숫자는 **다시 건드리지 않는다.**
+
+     화면 폭   망치 152  >  문대 148  >  민이 138
+     페이드    셋 다 0
+
+   ⛔ 「숫자로 재보니 더 나은 게 있다」는 이유로 바꾸지 말 것.
+      오늘 그렇게 여섯 번 바꿨고 여섯 번 다 대표님 눈에는 나빠졌다:
+        구간 바꿈 → 「큰애완견」 → 「하이에나」 → 「절뚝거려」
+        → 「한쪽발만」 → 「병자들 모습」 → 「언제까지 봐야 하는건지」
+      결국 맨 처음 설정으로 되돌려서 풀렸다.
+
+   ⛔ 페이드(겹쳐 그리기)를 다시 넣지 말 것.
+      두 자세가 동시에 보여 「원스텝 투스텝」으로 걷는다.
+
+   가로비 = 폭 ÷ 높이. 망치만 0.905 로 눌러 통통하게 만든 값이다
+   (원래 1.351 이면 몸이 어깨의 2.0배라 하이에나처럼 보인다).
+   ══════════════════════════════════════════════════════════════ */
+const WALK={
+  /* 🔴 페이드는 전부 0 이다. 겹쳐 그리면 두 자세가 동시에 보여서
+     「원스텝 투스텝」처럼 두 박자로 읽힌다(대표님: 「두장으로 보이고」). */
+  민이:{n:16, w:300, h:222, 배율:1.063, 가로비:1.351, 발끝:.881, 초당:24, 페이드:0},
+  /* 🔴 망치는 대표님이 처음에 「아주 좋아」 한 **구간 91~105** 그대로다. 구간은 손대지 말 것.
+     ⚠️ 걷기 어깨를 앉은 사진과 같게 맞추려다 1.4배로 키웠더니 하이에나가 됐다.
+        고양이는 앉으면 어깨가 높고 걸으면 낮다 — 같게 맞추면 안 된다. */
+  망치:{n:14, w:300, h:222, 배율:1.505, 가로비:0.905, 발끝:.901, 초당:24, 페이드:0},
+  문대:{n:18, w:300, h:222, 배율:1.169, 가로비:1.351, 발끝:.907, 초당:24, 페이드:0},   // 민이보다는 크다
+};
+for(const [k,v] of Object.entries(WALK)){
+  v.im=[]; for(let i=1;i<=v.n;i++) v.im.push(load(`동작/${k}_걷기/${String(i).padStart(2,"0")}.png`));
+}
+
+/* ── 소품 ────────────────────────────────────────────────────
+   🔴 그림마다 바닥 여백이 다르다. 밥그릇은 아래 28%가 빈칸이고 츄르는 거의 없다.
+      그림 바닥을 땅에 맞추면 **밥그릇이 28% 공중에 뜬다** — 창고가 떴던 이유가 이것.
+      그래서 「그림에서 실제 바닥이 몇 % 지점인가」를 재서 그 점을 땅에 붙인다.   */
+/* 🔴 소품 목록 — 19개 전부 「대표님 원본 + 바닥 그림자만 추가」(gen-image-gpt --edit, sunburst).
+   그림자가 그림 안에 있으니 코드 그림자는 안 그린다. 바닥 = 알파>200 인 가장 아래 지점 ÷ 높이.
+
+   🔴 크기는 2026-09-14 대표님 확정 — 창고 > 나무 2.0 > 캣타워 1.6 > 집 1.1 > 변기 .9 > 그릇 .5.
+      「소품은 아주 작아야」. 같은 종류의 윗 등급도 같은 크기다(등급은 모양이 좋아지는 것이지 커지는 게 아니다).
+      이 숫자는 다시 건드리지 않는다.                                                        */
+const PROPS={
+  나무_1:   {크기:2.0, 바닥:.945}, 나무_2:   {크기:2.0, 바닥:.962},
+  캣타워_1: {크기:1.6, 바닥:.922}, 캣타워_2: {크기:1.6, 바닥:.952},
+  캣타워_3: {크기:1.6, 바닥:.945}, 캣타워_4: {크기:1.6, 바닥:.956},
+  냥이집_1: {크기:1.1, 바닥:.842}, 냥이집_3: {크기:1.1, 바닥:.890},
+  변기_1:   {크기:.9,  바닥:.933},
+  스크래처_1:{크기:.7, 바닥:.801}, 캣닢화분_1:{크기:.6, 바닥:.917},
+  밥그릇_1: {크기:.5,  바닥:.933}, 물그릇_1: {크기:.5,  바닥:.876},
+  사료_1:   {크기:.5,  바닥:.946}, 사료_2:   {크기:.5,  바닥:.938}, 사료_3:   {크기:.5,  바닥:.952},
+  츄르_1:   {크기:.4,  바닥:.960}, 츄르_2:   {크기:.4,  바닥:.944}, 츄르_3:   {크기:.4,  바닥:.969},
+  /* 대표님 소품 9/16 (놀대리 등록, 바닥은 그림자 판 알파로 잼) */
+  나무_3: {크기:2.2, 바닥:0.963},
+  버들나무_1: {크기:2, 바닥:0.961},
+  새싹나무_1: {크기:1, 바닥:0.867},
+  과일나무_1: {크기:2, 바닥:0.952},
+  과일나무_2: {크기:2, 바닥:0.957},
+  과일나무_3: {크기:2, 바닥:0.958},
+  과일나무_4: {크기:2, 바닥:0.928},
+  과일나무_5: {크기:2, 바닥:0.935},
+  우주집_1: {크기:1.3, 바닥:0.939},
+  우주집_2: {크기:1.3, 바닥:0.899},
+  우주집_3: {크기:1.3, 바닥:0.95},
+  우주집_4: {크기:1.3, 바닥:0.874},
+  우주집_5: {크기:1.3, 바닥:0.858},
+  잔디_1: {크기:1.4, 바닥:0.745},
+  꽃밭_1: {크기:1.2, 바닥:0.786},
+  꽃밭_2: {크기:1.2, 바닥:0.832},
+  잔디_3: {크기:1.4, 바닥:0.831},
+  잔디_2: {크기:1.4, 바닥:0.792},
+  꽃밭_3: {크기:1.2, 바닥:0.879},
+  잔디_4: {크기:1.4, 바닥:0.84},
+  연못_1: {크기:2, 바닥:0.804},
+  놀이터_1: {크기:1.8, 바닥:0.883},
+  운석_1: {크기:1.2, 바닥:0.824},
+  이끼밭_1: {크기:1.6, 바닥:0.79},
+  연못_2: {크기:2, 바닥:0.844},
+  온천_1: {크기:1.8, 바닥:0.829},
+  가게_식당: {크기:2.6, 바닥:0.914},
+  가게_옷방: {크기:2.6, 바닥:0.863},
+  가게_장난감: {크기:2.6, 바닥:0.891},
+  가게_정원: {크기:2.6, 바닥:0.89},
+  가게_잡화점: {크기:2.6, 바닥:0.888},
+  가게_자판기: {크기:1.4, 바닥:0.927},
+  우체국_1: {크기:2.6, 바닥:0.932},
+};
+for(const k in PROPS) PROPS[k].im=load("소품/"+k+"_그림자.png");
+/* ── 건물 (9/16) ─────────────────────────────────────────────
+   상점 = 대표님이 GPT로 만드신 그림(소품/상점_원본.png)에 확정 방식(sunburst --edit)으로 바닥 그림자만 붙인 것.
+   창고처럼 마을의 붙박이다 — 옮기지도 뒤집지도 못하고, 톡 누르면 🛒 상점이 열린다.
+   자리는 창고(u .47~.68) 왼쪽 앞. 크기 3.6 — 2.6은 문이 냥이보다 작아 「들어갈 수 있어 보이는가」 기준에 못 미쳤다.                    */
+/* 대표님(9/16): 「상점이 너무 커. 창고보다 아주 약간 작거나 같아야지」 → 2.7(화면 220px, 창고 230px).
+   「내가 움직일 수 있게. 내가 자리 잡고 그걸 고정해줘」 → 꾹 눌러(0.5초) 끌면 옮겨지고 자리는 저장된다. 톡 누르면 상점이 열린다.
+   대표님이 자리를 정하시면 아래 u·v 기본값을 그 숫자로 못 박는다. */
+/* 🔴 2026-09-16 대표님 확정 자리(「상점 자리는 못박아줘」) — 대표님이 직접 옮겨 놓은 좌표를 크롬 저장값에서 읽어 옴. 건드리지 않는다. */
+const BUILDINGS=[ { n:"상점", im:load("소품/상점_그림자.png"), u:.556, v:.779, 크기:2.7, 바닥:.861, 열기:()=>상점열기() } ];
+const 건물옮기기=false;   // 못 박았다. 다시 옮기고 싶으면 true — 꾹 눌러 끌기가 살아난다
+if(건물옮기기){ try{ const bt=(마을읽기().buildings)||{}; for(const b of BUILDINGS){ if(bt[b.n]){ b.u=bt[b.n].u; b.v=bt[b.n].v; } } }catch(e){} }
+function 건물저장(){ const t=마을읽기(); t.buildings=t.buildings||{}; for(const b of BUILDINGS) t.buildings[b.n]={u:b.u,v:b.v}; 마을쓰기(t); }
+const 건물찾기=(x,y)=>BUILDINGS.find(b=>!b.held && b._box && x>=b._box.x && x<=b._box.x+b._box.w && y>=b._box.y && y<=b._box.y+b._box.h);
+/* 대표님(9/16): 창고 나무 옆에 세우려는데 「창고 자리」 규칙에 막혔다 → 「자리만 풀어줘」.
+   건물은 대표님이 자리를 정하는 것이니 창고 자리·소품 겹침 규칙은 안 건다. 밝은 띠 안·열린 구역 안이면 된다. */
+function 건물놓을수있나(b,u,v){
+  if(v<놓기.v0||v>놓기.v1||u<놓기.u0||u>땅끝u()-.05) return false;
+  if(u>열린끝()-.02) return false;
+  return true;
+}
+
+/* 땅에 놓인 것. 나중엔 플레이어가 창고에서 꺼내 놓는 자리가 여기 들어간다. */
+let PROPSET=[
+  {n:"냥이집_1", u:.735, v:.93 },
+  {n:"변기_1",  u:.80,  v:.96 },
+  {n:"밥그릇_1", u:.68,  v:.97 },
+  {n:"물그릇_1", u:.715, v:.975},
+  {n:"캣타워_3", u:.86,  v:.90 },
+  {n:"나무_1",  u:.92,  v:.86 },
+];
+/* 놓은 자리는 브라우저에 남긴다 — 새로고침해도 마을이 그대로다 */
+try{ const sv=JSON.parse(localStorage.getItem("그르릉_배치")||"null");
+  if(Array.isArray(sv)) PROPSET=sv.filter(p=>PROPS[p.n]); }catch(e){}
+function 저장(){ try{ localStorage.setItem("그르릉_배치", JSON.stringify(PROPSET.map(p=>({n:p.n,u:p.u,v:p.v,f:p.f||1})))); }catch(e){} }
+
+/* 자세 그림은 쓸 때 불러온다. 4마리×19장을 처음부터 다 받으면 느리다. */
+const POSEIM=new Map();
+function poseImg(c,p){
+  if(!c.f) return c.im0;                       // 자세 그림이 없는 아이
+  const key=c.f+"_"+p;
+  if(!POSEIM.has(key)) POSEIM.set(key, load("자세/"+key+".png"));
+  const im=POSEIM.get(key);
+  return (im.complete && im.naturalWidth) ? im : c.im0;   // 아직 안 왔으면 기본으로
+}
+
+/* ── 입양한 냥이 (🏠 입양 탭에서 데려온 아이들). 도감 사진 한 장으로 산다 — 자세는 아직 없다 ── */
+/* ── 성장 (9/16) — 사진은 그대로, 크기로 자란다. 콘대리 메모: 「크기 차이 자체가 성장 신호라 사진을 새로 안 만들어도 컸다가 전달된다」
+   아기(하루) .55 → 청소년(사흘) .9 → 어른 1.3. 입양·출생 시각(at)으로 센다. 단계가 바뀌면 알려준다.           */
+const 성장단계=[ {n:"아기", until:24*3600e3, big:아기}, {n:"청소년", until:72*3600e3, big:.9}, {n:"어른", until:Infinity, big:성묘} ];
+function 단계(c){ if(!c.at) return 성장단계[2]; const age=Date.now()-c.at; return 성장단계.find(s=>age<s.until); }
+function 성장갱신(){
+  for(const c of CATS){ if(!c.adopted) continue; const st=단계(c); if(c.stage!==st.n){ const first=!c.stage; c.stage=st.n; c.big=st.big; if(!first){ 안내("🎉 "+c.n+조사(c.n,"이","가")+" "+st.n+"이 됐어요!"); HEARTS.push({u:c.u,v:c.v,t0:(performance.now()-t0)/1000,c}); } } }
+}
+try{ const ad=JSON.parse(localStorage.getItem("그르릉_입양")||"[]"); for(const a of ad) CATS.push({n:a.n, f:null, src:a.src, u:a.u||.35, v:a.v||.90, big:아기, adopted:true, at:a.at||Date.now()}); }catch(e){}
+function 입양저장(){ try{ localStorage.setItem("그르릉_입양", JSON.stringify(CATS.filter(c=>c.adopted).map(c=>({n:c.n,src:c.src,u:c.u,v:c.v,at:c.at})))); }catch(e){} }
+setInterval(성장갱신, 30000);
+let CATPOS={}; try{ CATPOS=JSON.parse(localStorage.getItem("그르릉_냥이")||"{}"); }catch(e){}   // 옮겨 둔 냥이 자리 (냥이 옮기기는 아래 참고)
+CATS.forEach((c,i)=>{
+  if(CATPOS[c.n]){ c.u=CATPOS[c.n].u; c.v=CATPOS[c.n].v; }   // 대표님이 옮겨 둔 자리
+  c.im0 = load(c.src || ("cut/"+c.f+".png"));
+  c.ph  = i*1.7;
+  c.pose= 기본;  c.until = 1+i*1.3;  c.face = 1;
+  c.walk= 0;     c.tu = c.u;         c.home = c.u;
+  c.mood= Math.random();                        // 기분 — 높으면 우다다를 잘 한다
+  c.dash= 0;                                    // 우다다 남은 횟수
+});
+let t0=performance.now(), lastT=0;
+성장갱신();
+
+/* 다음에 뭘 할지 고른다 */
+function decide(c, tt){
+  // 우다다 중이면 계속 달린다
+  if(c.dash>0){
+    c.dash--;
+    // ⚠️ 우다다는 「제자리 근처에서」 뛰는 것이다. 온 동네를 가로지르면 남의 자리를 침범한다.
+    c.tu = Math.max(.14, Math.min(.86, c.home + (Math.random()-.5)*.30));
+    c.walk = 2; c.pose = "우다다"; c.until = tt+6;
+    return;
+  }
+  const r=Math.random();
+  if(r < .10 && c.mood > .55){                  // 기분이 좋으면 갑자기 우다다
+    c.dash = 2 + (Math.random()*3|0);
+    c.mood = Math.max(0, c.mood-.5);            // 실컷 뛰면 가라앉는다
+    return decide(c, tt);
+  }
+  if(r < .22){                                   // 사냥자세 → 뛰어오르기
+    c.pose="사냥자세"; c.until=tt+1.6+Math.random(); c.next="뛰어오르기"; return;
+  }
+  if(r < .40){                                   // 어디론가 걸어간다
+    c.tu = Math.max(.15, Math.min(.85, c.home + (Math.random()-.5)*.22));
+    c.walk=1; c.pose="서기"; c.until=tt+12; return;
+  }
+  if(r < .55){ c.pose=pick(심심); c.until=tt+2.5+Math.random()*3; return; }
+  if(r < .70){ c.pose=pick(잠);   c.until=tt+8+Math.random()*10;  return; }
+  c.pose=pick(쉼); c.until=tt+3+Math.random()*5;
+}
+
+/* ── 쓰다듬기 (누르면 반응 1) ────────────────────────────────
+   🔴 2026-09-16 대표님 확정(「좋아 다음단계로 가」). 부비기 2.4초 · 기분 +.22 · ♥ 1.4초. 건드리지 않는다.
+   냥이를 톡 누르면 하던 걸 멈추고 「부비기」 자세로 답한다. 기분이 오른다.
+   · 걷던 중이면 그 자리에서 멈춘다(걸어가던 목표는 버린다)
+   · 우다다 중이면 우다다도 끝난다 — 만져주는 게 더 좋으니까
+   · 연달아 누르면 부비기가 길어지고 기분이 더 오른다(상한 1)
+   · 누른 자리에서 ♥ 하나가 떠오른다 — 「눌렸다」는 걸 눈으로 알려주는 것          */
+const 부비기시간 = 2.4, 쓰다듬기분 = .22;
+const HEARTS=[];                                  // {u,v,t0} 떠오르는 하트
+function 쓰다듬기(c, tt){
+  c.wagUntil = tt+2.5;                                  // 꼬리 살랑
+  const 이어서 = c.pose==="부비기" && c.petAt && tt-c.petAt<부비기시간;   // 부비는 중에 또 누름
+  c.walk=0; c.dash=0; c.next=null; c.called=false;
+  c.pose="부비기";
+  c.until = 이어서 ? c.until+1.0 : tt+부비기시간;
+  c.petAt=tt;
+  c.mood=Math.min(1, c.mood+쓰다듬기분);
+  HEARTS.push({u:c.u, v:c.v, t0:tt, c});
+}
+/* ── 이름 부르기 (누르면 반응 2) ─────────────────────────────
+   🔴 2026-09-16 대표님 확정(「귀엽다」). 화면 가운데로 걸어와 박치기 2.0초 · 기분 +.15 · ♥. 건드리지 않는다.
+   이름 단추를 누르면 **그 아이가** 지금 보고 있는 화면 가운데로 걸어와서 박치기를 한다.
+   · 박치기 = 「봐달라」. 냥이가 먼저 와서 툭 박는 것 (대표님이 고쳐주신 뜻)
+   · 자던 아이도, 딴 데 가던 아이도 부르면 온다 — 이름을 알아듣는 게 「내 냥이」의 핵심
+   · 걷기는 확정된 걷기 그림·속도 그대로 쓴다. 이 함수는 목적지만 정한다
+   · 창고 자리(u .47~.68)는 창고 뒤로 들어가 보이니 그 옆으로 비켜 선다 (문대는 창고 앞이라 상관없다)
+   · 이미 그 자리에 있으면 바로 박치기                                                   */
+function 이름부르기(n){
+  const c=CATS.find(c=>c.n===n); if(!c) return;
+  const tt=(performance.now()-t0)/1000;
+  let tu=(camX+W/2)/landW();                      // 화면 가운데
+  tu=Math.max(.15, Math.min(.85, tu));
+  if(c.v<창고자리.v1 && tu>창고자리.u0-.03 && tu<창고자리.u1+.03)
+    tu = (tu-창고자리.u0 < 창고자리.u1-tu) ? 창고자리.u0-.03 : 창고자리.u1+.03;
+  c.dash=0; c.next=null; c.called=true;
+  if(Math.abs(tu-c.u)<.006){ 도착박치기(c,tt); return; }
+  c.tu=tu; c.walk=1; c.pose="서기"; c.until=tt+30;
+  const b=document.querySelector('#names button[data-n="'+n+'"]');
+  if(b){ b.classList.add("on"); setTimeout(()=>b.classList.remove("on"),700); }
+}
+function 도착박치기(c,tt){
+  c.wagUntil = tt+3;                                    // 이름 부르면 꼬리 살랑
+  c.called=false; c.walk=0;
+  c.pose="박치기"; c.until=tt+2.0;
+  c.mood=Math.min(1, c.mood+.15);
+  HEARTS.push({u:c.u, v:c.v, t0:tt+.3, c});         // 툭 박은 뒤에 ♥
+}
+document.getElementById("names").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-n]"); if(!b||mode) return; 이름부르기(b.dataset.n); hide();
+});
+/* ── 츄르 주기 (누르면 반응 3) ───────────────────────────────
+   🔴 2026-09-16 대표님 확정(「지금 아주 만족스러워」). 들고 얼굴에 대면 핥아 먹기 · ♥ 0.9초 · 기분 초당 +.10. 건드리지 않는다.
+   츄르를 **손에 들고 냥이 얼굴에 대면** 그 자리에서 고개 들고 핥아 먹는다.
+   대표님: 「츄르를 우리가 가지고 얼굴에 대면 맛있게 먹는 동작으로」 — 냥이가 걸어오는 방식은 어색해서 접었다.
+   · 대는 동안만 먹는다(0.6초마다 갱신). 떼면 곧 원래 생활로 돌아간다
+   · 먹는 동안 0.9초마다 ♥, 기분은 초당 +.10 (상한 1)
+   · 얼굴 = 냥이 그림의 위쪽 60%. 발치에 대면 안 먹는다
+   · 얼굴 위에서 손을 떼면 츄르는 **놓이지 않고** 원래 자리(땅) 또는 창고로 돌아간다
+   · 자세 그림이 있는 아이만(민이·망치·문대·삼색이). 츄르는 없어지지 않는다(소모·코인은 4단계에서) */
+function 얼굴위냥이(x,y){
+  const c=냥이찾기(x,y); if(!c||!c.f) return null;
+  const b=c._box; return (y < b.y + b.h*.60) ? c : null;
+}
+function 먹이기(c, tt){
+  if(c.pose!=="츄르먹기"){
+    c.walk=0; c.dash=0; c.next=null; c.called=false;
+    c.pose="츄르먹기"; c.lastHeart=tt-.5; c.lastFeed=tt;
+  }
+  c.until = tt+.6;                                   // 대고 있는 동안 계속 먹는다
+  c.mood = Math.min(1, c.mood + .10*Math.max(0, Math.min(.12, tt-c.lastFeed)));
+  c.lastFeed=tt;
+  if(tt-c.lastHeart > .9){ HEARTS.push({u:c.u, v:c.v, t0:tt, c}); c.lastHeart=tt; }
+}
+/* 잠깐 보여주는 안내 */
+let hintTimer=null;
+function 안내(msg){
+  hint.textContent=msg; hint.style.opacity=1; clearTimeout(hintTimer);
+  hintTimer=setTimeout(()=>{ hint.style.opacity=0; },2600);
+}
+/* ── 냥이 옮기기 (대표님 9/16: 「세 냥이들을 우리가 위치를 변경해서 놓을 수 있게」) ──
+   냥이를 끌면(8px 이상) 들린다. 밝은 띠 안·열린 구역에 놓으면 그 자리가 새 「집 자리」(home)가 된다. 톡은 전처럼 쓰다듬기.
+   자리는 저장된다(그르릉_냥이). 원근 때문에 앞줄에 놓으면 커 보인다 — 그게 맞다.                                */
+function 냥이자리저장(){ try{ const o={}; for(const c of CATS) o[c.n]={u:c.u,v:c.v}; localStorage.setItem("그르릉_냥이", JSON.stringify(o)); }catch(e){} }
+function 냥이놓기(c,u,v){
+  if(v<놓기.v0||v>놓기.v1||u<놓기.u0||u>땅끝u()-.05||u>열린끝()-.01) return false;
+  c.u=u; c.tu=u; c.home=u; c.v=v; c.walk=0; c.dash=0; c.called=false; c.pose="서기"; c.until=(performance.now()-t0)/1000+1.5; c.held=false;
+  냥이자리저장(); if(c.adopted) 입양저장(); return true;
+}
+function 냥이찾기(x,y){        // 앞에 있는 아이(v 큰 아이)부터
+  const arr=[...CATS].filter(c=>!c.held).sort((a,b)=>b.v-a.v);
+  for(const c of arr){ const b=c._box; if(b && x>=b.x && x<=b.x+b.w && y>=b.y && y<=b.y+b.h) return c; }
+  return null;
+}
+
+/* 🔴 이동은 「프레임당」이 아니라 「초당」이어야 한다.
+   프레임당으로 짜면 화면이 느린 기기에서 냥이가 제자리걸음을 한다 —
+   걷기 그림은 시간 기준으로 도는데 몸만 안 나가기 때문이다.
+   🔴 초당 0.021 = 약 46px/초. 대표님이 「아주 좋아」 한 맨 처음 망치의 속도다.
+      0.040(89px/초)으로 올렸더니 「너무 빨라」. 느긋한 쪽이 맞다.        */
+const 걷는속도 = .021, 뛰는속도 = .075;
+function step(c, tt, dt){
+  c.mood = Math.min(1, c.mood + .035*dt);        // 시간이 지나면 기분이 차오른다
+  if(c.walk){
+    const spd = (c.walk>1 ? 뛰는속도 : 걷는속도) * dt;
+    const d = c.tu - c.u;
+    if(Math.abs(d) < .006){
+      if(c.called) 도착박치기(c,tt);                  // 불러서 온 아이는 툭 박는다
+      else { c.walk=0; c.pose=기본; c.until=tt+.4; }
+    }
+    else { c.u += Math.sign(d)*Math.min(Math.abs(d), spd); c.face = d<0 ? -1 : 1; }
+    return;
+  }
+  if(tt > c.until){
+    if(c.next){ c.pose=c.next; c.next=null; c.until=tt+.9; return; }  // 확 뛰어오른다
+    decide(c, tt);
+  }
+}
+
+/* 숨쉬기 — 가로로 잘라 아주 조금씩 눌렀다 폈다 한다 */
+/* 꼬리 살랑 (대표님: 「이름 부르면 꼬리 살랑」이 핵심) — 꼬리 그림이 없으니 코드로 흔든다.
+   사진의 아래쪽 1/3(꼬리·엉덩이가 있는 자리)을 가로로 살짝 밀었다 당겼다 한다. 아래로 갈수록 크게.
+   wag = 남은 시간(초). 이름 부르고 도착했을 때·쓰다듬을 때 2.5초. 어색하면 힉스필드로 뽑는 게 다음 단계. */
+function breathe(im,x,y,w,h,ph,tt,wag){
+  const N=26;
+  for(let i=0;i<N;i++){
+    const sy=im.naturalHeight*i/N, sh=im.naturalHeight/N+1;
+    const up=1-i/N, b=Math.sin(tt*1.7+ph)*.013*up;
+    let sw=Math.sin(tt*1.1+ph+i/N)*w*.012*up*up;
+    if(wag>0){ const k=Math.max(0,(i/N-.66)/.34); sw += Math.sin(tt*9)*w*.07*k*k*Math.min(1,wag); }
+    cx.drawImage(im,0,sy,im.naturalWidth,sh, x+sw, y+h*i/N-h*b, w, h/N*(1+b)+1);
+  }
+}
+
+/* 카메라 — 좌우로만 민다 */
+let camX=0, maxX=0;
+let drag=null;
+const hint=document.getElementById("hint");
+let hinted=false;
+function hide(){ if(!hinted){ hinted=true; hint.style.opacity=0; } }
+setTimeout(hide,6000);
+
+/* ── 꺼내서 놓기 ──────────────────────────────────────────────
+   🔴 자리는 플레이어가 정한다(타운쉽 7년의 재미). 우리는 「놓을 수 있는 땅」만 정한다.
+     · 앞쪽 땅(v .72~.985)만 — 지평선 근처 멀리 놓으면 각도가 안 맞아 뜬다(창고가 그랬다)
+     · 창고 자리(그림에 구워져 있음)엔 못 놓고, 거기 놓으면 「창고에 넣기」가 된다
+     · 다른 소품과 겹치면 못 놓는다
+   흐름: 창고 누름 → 목록 → 하나 고름 → 손가락 따라다님 → 놓음 / 놓인 것을 끌면 옮김   */
+/* 대표님(9/16): 「창고에서 소품을 빼서 원하는 위치에 넣으려고 하니까 안 되던데」 — 띠가 좁고(.72~) 밖에 놓으면 말없이 창고로 돌아갔다.
+   → 띠를 .60 까지 올리고(원근으로 알아서 작아진다), 들고 있을 땐 띠를 보여주고, 밖에 놓으면 손에 든 채 이유를 알려준다. */
+const 놓기={ v0:.60, v1:.985, u0:.05, u1:.95 };
+/* ── 구역 (4-3, 9/16) ──────────────────────────────────────────
+   마을은 구역으로 자란다: 창고 → 집 → 놀이 → 가게거리(greureung-zones). 지금 땅은 두 구역 분량이라
+   「집 구역」까지만 열 수 있고, 그다음은 땅을 넓혀야(outpaint, 크레딧) 한다 — 그건 대표님께 여쭙고 한다.
+   잠긴 구역은 어둡게 가리고 끝에 「🔒 열기 · 값」 팻말. 카메라도 열린 데까지만 간다. 잠긴 땅엔 못 놓는다. */
+const ZONES=[ {n:"창고 구역", u1:.75, cost:0}, {n:"집 구역", u1:1.0, cost:500}, {n:"놀이 구역", u1:1.237, cost:800}, {n:"가게거리", u1:1.474, cost:1200} ];   // u 는 기준폭(4152) 대비. 놀이·가게거리는 넓힌 땅(9/16 outpaint)
+const ZONES_사용=()=>ZONES.filter(z=>z.u1<=땅끝u()+.01);   // 땅이 아직 없는 구역은 안 보인다
+function 열린수(){ const t=마을읽기(); return Math.max(1, Math.min(ZONES_사용().length, t.zones|0 || 1)); }
+const 열린끝=()=>ZONES[열린수()-1].u1;
+const zoneBtn=document.getElementById("zone"), zoneName=document.getElementById("zonename");
+function 구역열기(){
+  const t=마을읽기(), k=열린수(); if(k>=ZONES_사용().length) return;
+  const z=ZONES[k];
+  if((t.coin|0) < z.cost){ 안내("코인이 "+(z.cost-(t.coin|0))+"개 모자라요 — 🧩 놀이에서 벌어 오세요"); return; }
+  t.coin=(t.coin|0)-z.cost; t.zones=k+1; 마을쓰기(t); 코인갱신();
+  안내("🎉 "+z.n+조사(z.n,"이","가")+" 열렸어요! 옆으로 밀어 보세요"); hide();
+}
+zoneBtn.onclick=e=>{ e.stopPropagation(); 구역열기(); };
+zoneBtn.addEventListener("pointerdown",e=>e.stopPropagation());
+const 창고자리={ u0:.47, u1:.68, v0:.58, v1:.90 };
+let mode=null;                 // {n, from, x, y} 들고 있는 소품
+let pressed=null;              // pointerdown 순간 기억
+/* ── 땅 폭의 기준 (9/16) ─────────────────────────────────────
+   u 는 「땅 그림 폭의 몇 %」였는데, 땅을 옆으로 넓히면(outpaint) 그림 폭이 바뀌어 놓아 둔 것이 전부 밀린다.
+   → u 의 기준을 **처음 땅 폭 4152px** 로 못 박는다. 넓힌 땅에서는 u 가 1.0 을 넘어간다(놀이 구역 = 1.0~1.24 …).
+   landW() = 기준폭(u 계산용) · landTotalW() = 실제 그림 폭(그리기·카메라 한계용).                 */
+const 기준폭=4152;
+const landW=()=>(LAND.naturalWidth? H/LAND.naturalHeight*기준폭 : W);
+const landTotalW=()=>(LAND.naturalWidth? H/LAND.naturalHeight*LAND.naturalWidth : W);
+const 땅끝u=()=>(LAND.naturalWidth? LAND.naturalWidth/기준폭 : 1);
+const toUV=(x,y)=>({ u:(x+camX)/landW(), v:y/H });
+/* ── 확대 (대표님 9/16: 「소품들이 작아서 크게 보고 싶으면 확대할 수 있는 장치가 필요해」) ──
+   화면 아래 가운데를 붙잡고 키운다 — 땅은 그대로 발밑에 있고 하늘이 잘려 나간다.
+   ＋/－ 단추, Ctrl+휠, 두 손가락 벌리기. 손가락·마우스 좌표는 전부 「세계 좌표」로 바꿔 쓴다.   */
+let ZOOM = 1; try{ ZOOM = Math.min(2.4, Math.max(1, +localStorage.getItem("그르릉_확대")||1)); }catch(e){}
+function 확대(z){ ZOOM = Math.min(2.4, Math.max(1, z)); try{ localStorage.setItem("그르릉_확대", ZOOM.toFixed(2)); }catch(e){} }
+const toWorld=(x,y)=>({ x:(x-W/2)/ZOOM+W/2, y:(y-H)/ZOOM+H });
+document.getElementById("zin").onclick =()=>{ 확대(ZOOM*1.25); hide(); };
+document.getElementById("zout").onclick=()=>{ 확대(ZOOM/1.25); hide(); };
+const pointers=new Map(); let pinch=null;           // 두 손가락 벌리기
+/* 대표님(9/16): 「이 노란 점선 때문에 거기에 소품을 넣을 수가 없어. 땅을 꾸미기 시작하는 단계가 여기부터인데」
+   → 「여기 놓으면 창고로 반납」 구역(창고자리 전체)을 없앤다. 반납은 ✕ 그만으로 충분하다.
+   못 놓는 곳은 창고 건물의 몸통(지붕·벽)뿐 — 바닥 v .88 위, 문 앞 땅과 나무 옆은 다 놓인다. */
+const 창고몸통={ u0:.61, u1:.665, v0:.60, v1:.84 };   // 9/16 좁힘: .49 부터 잡으니 왼쪽 나무·상점 주변까지 막혔다(대표님: 「상점 바로 옆에 나무 안 돼」). 벽·지붕만
+const 창고안=(u,v)=> u>창고몸통.u0 && u<창고몸통.u1 && v>창고몸통.v0 && v<창고몸통.v1;
+function 놓을수있나(n,u,v,skip){
+  if(v<놓기.v0||v>놓기.v1||u<놓기.u0||u>땅끝u()-.05) return false;
+  if(u>열린끝()-.01) return false;                        // 잠긴 구역
+  if(창고안(u,v)) return false;
+  const hz=H*HORIZON, base=CAT_AT_HOUSE/((.86-HORIZON)/(1-HORIZON)), lw=landW();
+  const P=PROPS[n]; const d=(v*H-hz)/(H-hz); const ph=base*d*P.크기, pw=ph*P.im.naturalWidth/P.im.naturalHeight;
+  for(let i=0;i<PROPSET.length;i++){ const q=PROPSET[i]; if(i===skip) continue;
+    const Q=PROPS[q.n]; const qd=(q.v*H-hz)/(H-hz); const qh=base*qd*Q.크기, qw=qh*Q.im.naturalWidth/Q.im.naturalHeight;
+    /* 대표님(9/16): 「상점 바로 옆에 나무 넣으려니 안 돼」 → 겹침 규칙을 느슨하게. 같은 줄에서 한가운데가 포개질 때만 막는다 (.42→.22, 34→22px) */
+    if(Math.abs((u-q.u)*lw) < (pw+qw)*.22 && Math.abs((v-q.v)*H) < 22) return false; }
+  for(const b of BUILDINGS){ if(!b.im.naturalWidth) continue;                       // 건물은 몸통 한가운데만 막는다 — 옆·앞은 다 놓인다
+    const bd=(b.v*H-hz)/(H-hz); const bh=base*bd*b.크기, bw=bh*b.im.naturalWidth/b.im.naturalHeight;
+    if(Math.abs((u-b.u)*lw) < bw*.30 && Math.abs((v-b.v)*H) < 26) return false; }
+  return true;
+}
+function 집기(n, from, x, y){ mode={n,from,x,y,f:(from&&from.f)||1}; cv.style.cursor="crosshair"; hide();
+  if(n.startsWith("츄르")) 안내("츄르를 냥이 얼굴에 대 보세요 🐾 · 땅에 두려면 밝은 띠 안을 누르세요");
+  else 안내("밝은 띠 안의 땅을 누르면 놓여요 · ↔ 뒤집기 · ✕ 그만"); }
+/* ── 뒤집기 (대표님 9/16: 「이쪽저쪽 돌려서 마음에 드는 쪽이 됐을 때 놓게」) ──
+   들고 있을 때 아래 「↔ 뒤집기」 단추(또는 R 키). 놓인 것은 톡 누르면 뒤집힌다. 뒤집힘은 저장된다. */
+const flipBtn=document.getElementById("flip");
+function 뒤집기(){ if(mode) mode.f=-(mode.f||1); }
+flipBtn.addEventListener("pointerdown",e=>e.stopPropagation());
+flipBtn.onclick=e=>{ e.stopPropagation(); 뒤집기(); };
+addEventListener("keydown",e=>{ if(e.key==="r"||e.key==="R"||e.key==="ㄱ") 뒤집기(); });
+function 놓기끝(x,y){
+  const {u,v}=toUV(x,y);
+  if(mode.cat){
+    const c=mode.cat;
+    if(!냥이놓기(c,u,v)){ 안내("여기엔 못 놓아요 — 밝은 띠 안의 땅에 놓아 주세요 (그만두려면 ✕)"); mode.bad=performance.now(); return; }
+    mode=null; cv.style.cursor="grab"; 안내(c.n+" 자리를 옮겼어요"); return;
+  }
+  if(mode.building){                                     // 건물 옮기기
+    const b=mode.building;
+    if(!건물놓을수있나(b,u,v)){ 안내("여기엔 못 세워요 — 밝은 띠 안의 빈 땅에 세워 주세요 (그만두려면 ✕)"); mode.bad=performance.now(); return; }
+    b.u=u; b.v=v; b.held=false; 건물저장(); mode=null; cv.style.cursor="grab";
+    안내(b.n+" 자리를 옮겼어요. 마음에 드는 자리가 정해지면 놀대리에게 말씀해 주세요 — 기본 자리로 못 박아 드려요"); return;
+  }
+  if(mode.n.startsWith("츄르") && 얼굴위냥이(x,y)){
+    if(mode.from) PROPSET.push(mode.from);           // 땅에서 들고 온 츄르는 원래 자리로
+    else 창고에(mode.n, +1);                         // 창고에서 꺼낸 츄르는 창고로 돌아간다
+  }
+  else if(놓을수있나(mode.n,u,v,null)) PROPSET.push({n:mode.n,u,v,f:mode.f||1});
+  else {                                               // 못 놓는 자리 — 놓지 않고 손에 그대로. 이유를 알려준다
+    const 겹침 = v>=놓기.v0 && v<=놓기.v1 && u>=놓기.u0 && u<=놓기.u1;
+    안내(창고안(u,v) ? "창고 건물 위엔 못 놓아요 — 앞마당이나 옆에 놓아 주세요" : 겹침 ? "다른 소품과 겹쳐요 — 조금 옆으로 놓아 주세요" : "여기엔 못 놓아요 — 밝은 띠 안의 땅에 놓아 주세요 (창고로 돌려보내려면 ✕)");
+    mode.bad=performance.now(); return;
+  }
+  mode=null; cv.style.cursor="grab"; 저장();
+}
+function 놓기취소(){
+  if(!mode) return;
+  if(mode.building){ mode.building.held=false; mode=null; cv.style.cursor="grab"; return; }
+  if(mode.cat){ const c=mode.cat; c.held=false; mode=null; cv.style.cursor="grab"; return; }
+  if(mode.from) PROPSET.push(mode.from);               // 땅에서 들었던 건 원래 자리로
+  else 창고에(mode.n, +1);                             // 창고에서 꺼낸(또는 방금 산) 건 창고로
+  mode=null; cv.style.cursor="grab"; 저장();
+}
+document.getElementById("cancel").onclick=e=>{ e.stopPropagation(); 놓기취소(); };
+document.getElementById("cancel").addEventListener("pointerdown",e=>e.stopPropagation());
+addEventListener("keydown",e=>{ if(e.key==="Escape") 놓기취소(); });
+function 소품찾기(x,y){        // 앞에 있는 것(v 큰 것)부터
+  const arr=PROPSET.map((p,i)=>({p,i})).sort((a,b)=>b.p.v-a.p.v);
+  for(const {p,i} of arr){ const b=p._box; if(b && x>=b.x && x<=b.x+b.w && y>=b.y && y<=b.y+b.h) return i; }
+  return -1;
+}
+const 핀치거리=()=>{ const a=[...pointers.values()]; return Math.hypot(a[0].x-a[1].x, a[0].y-a[1].y); };
+cv.addEventListener("pointerdown",e=>{
+  cv.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pointers.size===2){                                  // 두 손가락 — 벌리면 확대, 오므리면 축소
+    pinch={d0:핀치거리(), z0:ZOOM}; pressed=null; drag=null; cv.classList.remove("drag"); return;
+  }
+  const {x:X,y:Y}=toWorld(e.clientX,e.clientY);
+  if(mode){ mode.x=X; mode.y=Y; return; }
+  const hit=소품찾기(X,Y);
+  pressed={x:X,y:Y,hit,moved:false,cat:냥이찾기(X,Y)};
+  const bld = 건물옮기기 && hit<0 && !pressed.cat ? 건물찾기(X,Y) : null;
+  if(bld){                                                // 건물: 0.5초 꾹 누르면 들린다 (톡은 열기)
+    pressed.building=bld;
+    pressed.timer=setTimeout(()=>{ if(!pressed||pressed.moved||pressed.building!==bld) return;
+      bld.held=true; mode={n:bld.n, building:bld, from:null, x:pressed.x, y:pressed.y, x0:pressed.x, y0:pressed.y, fresh:true, f:1}; cv.style.cursor="crosshair";
+      drag=null; cv.classList.remove("drag"); 안내("상점을 들었어요 — 밝은 띠 안에 세워 주세요"); }, 500);
+  }
+  if(hit<0){ drag={x:X, c:camX}; cv.classList.add("drag"); }
+});
+cv.addEventListener("pointermove",e=>{
+  if(pointers.has(e.pointerId)) pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinch && pointers.size>=2){ 확대(pinch.z0 * 핀치거리()/Math.max(1,pinch.d0)); hide(); return; }
+  const {x:X,y:Y}=toWorld(e.clientX,e.clientY);
+  if(mode){ mode.x=X; mode.y=Y; return; }
+  if(pressed && pressed.cat){                                // 냥이를 끌면 들린다
+    if(!pressed.moved && Math.hypot(X-pressed.x,Y-pressed.y)>8){
+      pressed.moved=true; const c=pressed.cat; c.held=true; c.walk=0; c.dash=0;
+      mode={n:c.n, cat:c, from:null, x:X, y:Y, f:1}; cv.style.cursor="crosshair"; drag=null; cv.classList.remove("drag");
+      안내(c.n+"를 들었어요 — 밝은 띠 안에 놓아 주세요. 거기가 "+c.n+"의 새 자리가 돼요");
+    }
+    return;
+  }
+  if(pressed && pressed.hit>=0){
+    if(!pressed.moved && Math.hypot(X-pressed.x,Y-pressed.y)>8){
+      pressed.moved=true;
+      const p=PROPSET.splice(pressed.hit,1)[0];            // 들어 올린다
+      집기(p.n, p, X, Y);
+    }
+    return;
+  }
+  if(!drag) return;
+  camX = drag.c - (X-drag.x);
+  if(Math.abs(X-drag.x)>10){ hide(); if(pressed){ pressed.moved=true; if(pressed.timer){ clearTimeout(pressed.timer); pressed.timer=null; } } }
+});
+cv.addEventListener("pointerup",e=>{
+  pointers.delete(e.pointerId);
+  if(pressed && pressed.timer){ clearTimeout(pressed.timer); pressed.timer=null; }
+  if(pinch){ if(pointers.size<2){ pinch=null; } pressed=null; drag=null; return; }
+  const {x:X,y:Y}=toWorld(e.clientX,e.clientY);
+  if(mode){
+    /* 꾹 눌러 든 직후 손을 떼면(안 움직였으면) 놓지 않고 계속 든다 — 그다음 원하는 자리를 누르면 놓인다 */
+    if(mode.building && mode.fresh && Math.hypot(X-mode.x0, Y-mode.y0)<8){ mode.fresh=false; pressed=null; drag=null; cv.classList.remove("drag"); return; }
+    놓기끝(X,Y); pressed=null; drag=null; cv.classList.remove("drag"); return; }
+  if(pressed && !pressed.moved){
+    const cat=냥이찾기(X,Y);                             // 냥이가 소품·창고 앞에 서 있으니 냥이를 먼저 본다
+    if(cat){ 쓰다듬기(cat, (performance.now()-t0)/1000); hide(); }
+    else if(pressed.hit>=0){                             // 놓인 소품을 톡 — 뒤집힌다
+      const p=PROPSET[pressed.hit]; if(p){ p.f=-(p.f||1); 저장(); }
+    }
+    else {
+      const b=BUILDINGS.find(b=>b._box && X>=b._box.x && X<=b._box.x+b._box.w && Y>=b._box.y && Y<=b._box.y+b._box.h);
+      if(b){ b.열기(); hide(); }                            // 건물을 톡 누르면 열린다 (상점)
+      else { const {u,v}=toUV(X,Y); if(창고안(u,v)) 창고열기(); }   // 창고를 톡 누르면 열린다
+    }
+  }
+  pressed=null; drag=null; cv.classList.remove("drag");
+});
+cv.addEventListener("pointercancel",e=>{ pointers.delete(e.pointerId); if(pointers.size<2) pinch=null; });
+/* ── 코인 지갑 (4단계: 퍼즐 ↔ 마을 연결) ───────────────────────
+   퍼즐(arrows/index.html)이 레벨을 깨면 localStorage "nyangi_town_v1".coin 에 코인을 더한다.
+   마을은 그 값을 그대로 보여준다 — 지갑은 하나다.
+   퍼즐은 마을 위에 카드로 뜬다(iframe). 뒤에서 행성은 계속 돌아간다.
+   퍼즐이 코인을 쓰면 storage 이벤트가 와서 바로 갱신된다.                        */
+const TOWN_KEY="nyangi_town_v1";
+function 마을읽기(){ try{ return JSON.parse(localStorage.getItem(TOWN_KEY)||"{}"); }catch(e){ return {}; } }
+function 마을쓰기(t){ try{ localStorage.setItem(TOWN_KEY, JSON.stringify(t)); }catch(e){} }
+const coinEl=document.getElementById("coin");
+let coinShown=null;
+function 코인갱신(){
+  const c=마을읽기().coin|0;
+  if(c===coinShown) return;
+  coinEl.querySelector("b").textContent=c.toLocaleString();
+  if(coinShown!==null && c>coinShown){ coinEl.classList.remove("bump"); void coinEl.offsetWidth; coinEl.classList.add("bump"); }
+  coinShown=c;
+}
+addEventListener("storage",e=>{ if(e.key===TOWN_KEY) 코인갱신(); });
+코인갱신();
+const puzzle=document.getElementById("puzzle"), pxframe=document.getElementById("pxframe");
+let puzzleOpenedAt=0;
+function 퍼즐열기(){ if(mode) return; panel.hidden=true; pxframe.src="../arrows/index.html"; puzzle.hidden=false; puzzleOpenedAt=performance.now(); hide(); }
+function 퍼즐닫기(){ puzzle.hidden=true; pxframe.src="about:blank"; 코인갱신(); }
+document.getElementById("bplay").onclick=퍼즐열기;
+document.getElementById("pxclose").onclick=퍼즐닫기;
+puzzle.addEventListener("click",e=>{                       // 바깥 어둔 곳을 누르면 닫힌다
+  if(e.target===puzzle && performance.now()-puzzleOpenedAt>400) 퍼즐닫기();   // 여는 클릭이 곧바로 닫는 클릭이 되지 않게
+});
+
+/* 창고 패널 */
+const panel=document.getElementById("panel"), items=document.getElementById("items");
+const label=n=>{ n=n.replace(/^가게_/,""); const m=n.match(/^(.+)_(\d)$/); return m? (m[2]==="1"? m[1] : m[1]+" "+m[2]) : n; };
+/* ── 코인으로 사기 (4-2) ─────────────────────────────────────
+   창고엔 「가진 것」만 있다. 나머지는 아래 「가게」에 값이 붙어 있고, 코인으로 사면 창고로 들어와 바로 손에 들린다.
+   처음엔 밥그릇 1·츄르 1만 가진 채로 시작한다(놀대리 제안, 9/16). 이미 땅에 놓여 있던 것은 가진 것으로 친다.
+   값은 크기 순(창고 밖): 나무 > 캣타워 > 냥이집 > 변기 > 스크래처 > 화분 > 사료 > 그릇 > 츄르.
+   퍼즐 한 판이 40~70코인, 타임 도전은 3배 — 나무 하나가 열 판쯤이다.                             */
+const PRICE={ 나무:600, 캣타워:450, 냥이집:350, 변기:200, 스크래처:150, 캣닢화분:120, 사료:80, 밥그릇:60, 물그릇:60, 츄르:40 , 잔디:60, 꽃밭:90, 버들나무:700, 새싹나무:150, 과일나무:500, 우주집:400, 연못:900, 놀이터:1200, 운석:700, 이끼밭:300, 온천:1500, 가게:2500, 우체국:2500 };
+/* 대표님(9/16): 「고급품과 일반품의 가격 차이를 두고」 → 등급(이름 뒤 숫자)마다 배율. 1등급 ×1 · 2 ×1.8 · 3 ×3 · 4 ×4.5 */
+const 등급배율=[1, 1.8, 3, 4.5, 6.5];
+const 등급=n=>{ const m=n.match(/_([0-9])$/); return m? +m[1] : 1; };
+const 값=n=>Math.round((PRICE[n.replace(/_[0-9]$/,"")]||100) * (등급배율[등급(n)-1]||1) / 10) * 10;
+/* 대표님(9/16): 「복수로도 살 수 있게 — 나무 같은 건 여러 그루 있어야 예쁘게 꾸민다」
+   → 창고는 이름 목록이 아니라 **개수**(t.inv = {이름: 창고에 있는 개수}). 땅에 놓인 건 PROPSET 에 따로.
+   옛 owned 목록은 처음 한 번 개수 1씩으로 옮긴다. 시작 선물은 밥그릇 1·츄르 1.                   */
+function 가진것(){
+  const t=마을읽기();
+  if(!t.inv){
+    t.inv={};
+    const 시작=["밥그릇_1","츄르_1"];
+    const out=PROPSET.map(p=>p.n);
+    for(const n of new Set([...시작, ...(t.owned||[])])) if(!out.includes(n)) t.inv[n]=(t.inv[n]||0)+1;   // 놓인 건 이미 땅에 있으니 창고엔 없음
+    t.shopInit=true; 마을쓰기(t);
+  }
+  return t;
+}
+function 창고에(n, d){ const t=가진것(); t.inv[n]=Math.max(0,(t.inv[n]||0)+d); if(!t.inv[n]) delete t.inv[n]; 마을쓰기(t); }
+function 창고넣기(){                                     // 들고 있는 걸 창고로 (✕ 그만과 달리, 땅에서 든 것도 창고로 들어간다)
+  if(!mode||mode.building||mode.cat) return;
+  창고에(mode.n, +1); mode=null; cv.style.cursor="grab"; 저장(); 안내("창고에 넣었어요");
+}
+document.getElementById("tostore").onclick=e=>{ e.stopPropagation(); 창고넣기(); };
+document.getElementById("tostore").addEventListener("pointerdown",e=>e.stopPropagation());
+/* 대표님(9/16): 「일단 상점을 만들어야겠다, 그래야 상점에서 물건을 살 수 있지」 — 가게가 창고 패널 아래에 숨어 있었다.
+   → 🛒 상점은 따로. 창고 = 내 물건(꺼내기), 상점 = 값표(사기). 나중에 마을에 상점 건물이 생기면 그 건물을 눌러도 열린다. */
+const ptitle=document.getElementById("ptitle");
+let 패널종류="store";
+function 탭표시(k){ 패널종류=k; document.getElementById("tabStore").classList.toggle("on",k==="store"); document.getElementById("tabShop").classList.toggle("on",k==="shop"); }
+document.getElementById("tabStore").onclick=()=>창고열기();
+document.getElementById("tabShop").onclick=()=>상점열기();
+document.getElementById("tabCats").onclick=()=>냥이목록열기();
+document.getElementById("tabAdopt").onclick=()=>입양열기();
+document.getElementById("bcats").onclick=()=>{ if(mode) return; (panel.hidden||패널종류!=="cats") ? 냥이목록열기() : (panel.hidden=true); };
+
+/* ── 🐾 냥이 목록 (대표님 9/16: 「냥이를 선택하는 건 어떻게 할 거야」) ──
+   우리 냥이 전부를 카드로. 사진·이름·기분·지금 뭐 하는지·어느 구역. 카드를 누르면 화면이 그 아이에게 간다.
+   새 냥이가 생기면 여기가 도감이 된다.                                                          */
+const 기분하트=m=>{ const n=Math.round(Math.max(0,Math.min(1,m))*5); return "♥".repeat(n)+"♡".repeat(5-n); };
+const 상태말=c=> c.held? "들려 있음" : c.walk>1? "우다다 중" : c.walk? "산책 중" : ({부비기:"부비는 중",박치기:"박치기 중",츄르먹기:"츄르 먹는 중",웅크려자기:"자는 중",뻗어자기:"자는 중",식빵:"식빵 굽는 중",그루밍:"그루밍 중",하품:"하품 중",기지개:"기지개 중",창밖보기:"멍 때리는 중",앞발들기:"앞발 드는 중",배보이기:"배 보이는 중",꾹꾹이:"꾹꾹이 중",사냥자세:"사냥 자세",뛰어오르기:"점프!",엎드리기:"엎드려 있음"}[c.pose]||"서 있음");
+function 냥이목록열기(){
+  ptitle.textContent="카드를 누르면 그 아이에게 가요"; 탭표시("cats");
+  const lw=landW();
+  items.innerHTML = CATS.map((c,i)=>{ const z=ZONES.find(z=>c.u<=z.u1)||ZONES[ZONES.length-1];
+    return '<div class="it cat" data-cat="'+i+'"><img src="'+(c.src||("cut/"+c.f+".png"))+'" alt="">'+c.n+
+      '<span class="mood">'+기분하트(c.mood)+'</span><span class="sub">'+(c.adopted? 단계(c).n+' · ':'')+상태말(c)+' · '+z.n+'</span></div>'; }).join("");
+  panel.hidden=false; hide();
+}
+function 냥이에게가기(c){ camX = c.u*landW() - W/2; 안내(c.n+"에게 왔어요 · 톡 누르면 쓰다듬기, 끌면 자리 옮기기"); }
+
+/* ── 🏠 입양 — 도감 55종 중 코인으로 데려온다. 처음엔 앉은 사진 한 장으로 산다(자세·걷기는 키우는 아이만 나중에 뽑는다 — 크레딧) ── */
+const 도감=["01_고등어","02_검정","03_턱시도","04_삼색이","05_거북등","06_치즈","07_젖소","08_블루","09_클래식태비","10_점박이","11_크림","12_러시안블루","13_샴","14_페르시안","15_메인쿤","16_스코티시폴드","17_뱅갈","18_브리티시숏헤어","19_아비시니안","20_노르웨이숲","21_랙돌","22_흰둥이","23_흰둥이오드아이","24_검정장모","25_고등어장모","26_삼색장모","27_틱드","28_블루틱드","29_실버고등어","30_실버클래식","31_실버점박이","32_블랙스모크","33_블루스모크","34_레드스모크","35_씰포인트","36_블루포인트","37_초콜릿포인트","38_라일락포인트","39_토티포인트","40_링스포인트","41_초콜릿","42_라일락","43_시나몬","44_폰","45_초콜릿고등어","46_블루크림","47_파스텔삼색","48_토비","49_밴검정","50_밴주황","51_양말검정","52_턱시도주황","53_젖소주황","54_주황클래식","55_크림단색"];
+const 입양값=1500;                                       // 나무 두 그루 반. 퍼즐 스무 판쯤
+const 도감이름=k=>k.replace(/^d+_/,"");
+const 조사=(w,받침있음,받침없음)=>{ const ch=w.charCodeAt(w.length-1); return (ch>=0xAC00&&ch<=0xD7A3) ? (((ch-0xAC00)%28)? 받침있음 : 받침없음) : 받침없음; };
+function 입양열기(){
+  const coin=마을읽기().coin|0;
+  ptitle.textContent="🪙 "+coin.toLocaleString()+" 있어요 · 한 아이 🪙 "+입양값.toLocaleString(); 탭표시("adopt");
+  const 있는=new Set(CATS.map(c=>c.src||("cut/"+c.f+".png")));
+  items.innerHTML = 도감.map(k=>{ const src="cut/"+k+".png", have=있는.has(src);
+    return '<div class="it adopt'+(have?' none':(coin<입양값?' poor':''))+'" '+(have?'':'data-adopt="'+k+'"')+'><img src="'+src+'" alt="">'+도감이름(k)+'<span class="sub">'+(have?"함께 살아요":"🪙 "+입양값.toLocaleString())+'</span></div>'; }).join("");
+  panel.hidden=false; hide();
+}
+function 입양하기(k){
+  const t=마을읽기(); if((t.coin|0)<입양값){ items.classList.remove("shake"); void items.offsetWidth; items.classList.add("shake"); 안내("코인이 "+(입양값-(t.coin|0))+"개 모자라요 — 🧩 놀이에서 벌어 오세요"); return; }
+  let name=(prompt("이 아이 이름을 지어 주세요", 도감이름(k))||"").trim(); if(!name) return;
+  const used=new Set(CATS.map(c=>c.n)); let base=name, n=2; while(used.has(name)) name=base+n++;
+  t.coin=(t.coin|0)-입양값; 마을쓰기(t); 코인갱신();
+  const lw=landW(); const u=Math.max(.10, Math.min(열린끝()-.05, (camX+W/2)/lw + (Math.random()-.5)*.1)), v=.82+Math.random()*.12;
+  const c={n:name, f:null, src:"cut/"+k+".png", u, v, big:아기, adopted:true, at:Date.now()};
+  c.im0=load(c.src); c.ph=Math.random()*6; c.pose=기본; c.until=(performance.now()-t0)/1000+1; c.face=1; c.walk=0; c.tu=u; c.home=u; c.tv=null; c.wph=0; c.hurry=null; c.mood=.8; c.dash=0;
+  CATS.push(c); 입양저장(); 냥이자리저장(); 성장갱신();
+  panel.hidden=true; HEARTS.push({u,v,t0:(performance.now()-t0)/1000,c}); 안내("🎉 "+name+조사(name,"이","가")+" 그르릉 행성에 왔어요!");
+}
+function 창고열기(){
+  const t=가진것();
+  const have=Object.keys(PROPS).filter(n=>(t.inv[n]|0)>0);
+  ptitle.textContent="꺼낼 것을 고르세요"; 탭표시("store");
+  items.innerHTML = have.length ? have.map(n=>
+    '<div class="it" data-n="'+n+'"><img src="소품/'+n+'_그림자.png" alt="">'+label(n)+'<span class="price">'+t.inv[n]+'개</span></div>').join("")
+    : '<div class="it none">비어 있어요 — 🛒 상점에서 사 오세요. 놓인 것은 끌어서 📦 창고에 넣기로 다시 들어와요</div>';
+  panel.hidden=false; hide();
+}
+function 상점열기(){
+  const t=가진것(), coin=t.coin|0;
+  const shop=Object.keys(PROPS).sort((a,b)=>값(a)-값(b));          // 다 판다 — 같은 걸 여러 개 살 수 있다
+  const placed={}; for(const p of PROPSET) placed[p.n]=(placed[p.n]||0)+1;
+  ptitle.textContent="🪙 "+coin.toLocaleString()+" 있어요 · 누를 때마다 하나씩 사요"; 탭표시("shop");
+  items.innerHTML = shop.map(n=>{ const own=(t.inv[n]|0)+(placed[n]||0);
+    return '<div class="it shop'+(coin<값(n)?' poor':'')+'" data-shop="'+n+'"><img src="소품/'+n+'_그림자.png" alt="">'+label(n)+'<span class="price">🪙 '+값(n).toLocaleString()+(own?' · 보유 '+own:'')+'</span></div>'; }).join("");
+  panel.hidden=false; hide();
+}
+document.getElementById("bshop").onclick=()=>{ if(mode) return; (panel.hidden||패널종류!=="shop") ? 상점열기() : (panel.hidden=true); };
+items.addEventListener("click",e=>{
+  const catEl=e.target.closest(".it[data-cat]");
+  if(catEl){ const c=CATS[+catEl.dataset.cat]; if(c){ panel.hidden=true; 냥이에게가기(c); } return; }
+  const adoptEl=e.target.closest(".it[data-adopt]");
+  if(adoptEl){ 입양하기(adoptEl.dataset.adopt); return; }
+  const buy=e.target.closest(".it[data-shop]");
+  if(buy){                                               // 산다
+    const n=buy.dataset.shop, t=가진것(), price=값(n);
+    if((t.coin|0) < price){
+      items.classList.remove("shake"); void items.offsetWidth; items.classList.add("shake");
+      안내("코인이 "+(price-(t.coin|0))+"개 모자라요 — 🧩 놀이에서 벌어 오세요"); return;
+    }
+    t.coin=(t.coin|0)-price; 마을쓰기(t); 코인갱신();      // 산 것은 바로 손에 (창고 개수는 안 거친다)
+    panel.hidden=true; 집기(n, null, W/2, H*.9); 안내(label(n)+" 샀어요! 자리를 고르세요 · 또 사려면 🛒 상점을 다시 여세요");
+    return;
+  }
+  const el=e.target.closest(".it[data-n]"); if(!el) return;
+  panel.hidden=true;
+  창고에(el.dataset.n, -1);                              // 창고에서 하나 꺼낸다
+  집기(el.dataset.n, null, W/2, H*.9);                  // 고르면 손가락을 따라다닌다
+});
+document.getElementById("pclose").onclick=()=>panel.hidden=true;
+document.getElementById("bstore").onclick=()=>{ if(mode) return; (panel.hidden||패널종류!=="store") ? 창고열기() : (panel.hidden=true); };
+addEventListener("wheel",e=>{
+  if(e.ctrlKey){ e.preventDefault(); 확대(ZOOM * (e.deltaY<0 ? 1.1 : 1/1.1)); hide(); return; }   // Ctrl+휠 = 확대
+  camX += (e.deltaY + e.deltaX)/ZOOM; hide();
+},{passive:false});
+addEventListener("keydown",e=>{
+  if(e.key==="ArrowRight") { camX+=90; hide(); }
+  if(e.key==="ArrowLeft")  { camX-=90; hide(); }
+});
+
+const posEl=document.getElementById("pos"), knob=document.getElementById("knob");
+
+function draw(){
+  cx.clearRect(0,0,W,H);
+  cx.fillStyle="#07061a"; cx.fillRect(0,0,W,H);
+
+  /* 땅을 화면 높이에 맞춘다. 그 배율이 이 세계의 기준이 된다. */
+  const ready = LAND.complete && LAND.naturalWidth;
+  const k  = ready ? H/LAND.naturalHeight : 1;
+  const lw = ready ? 기준폭*k : W;                      // u → px (기준폭)
+  const lwT= ready ? LAND.naturalWidth*k : W;          // 실제 그림 폭
+  const 끝 = 열린끝();
+  maxX = Math.max(0, Math.min(lwT - W, 끝*lw - W*0.65));    // 열린 구역 끝에서 화면 1/3쯤 더 — 잠긴 땅이 어둡게 보여야 「저기가 다음」임을 안다
+  const pad = W*(1-1/ZOOM)/2;                              // 확대하면 화면 밖 양옆이 그만큼 더 보인다
+  camX = Math.max(-pad, Math.min(maxX+pad, camX));
+  flipBtn.hidden = !mode || !!mode.building || !!mode.cat; document.getElementById("cancel").hidden = !mode;
+  document.getElementById("tostore").hidden = !mode || !!mode.building || !!mode.cat;
+  /* 🔍 여기부터 세계 — 화면 아래 가운데를 붙잡고 ZOOM 배로 키운다 */
+  cx.save(); cx.translate(W/2,H); cx.scale(ZOOM,ZOOM); cx.translate(-W/2,-H);
+
+  /* 하늘 먼저 — 땅보다 천천히 흐른다 */
+  if(SKY.readyState>=2 && SKY.videoWidth){
+    const sh = H*0.62;                                  // 화면 위쪽 62%
+    const sw = SKY.videoWidth * (sh/SKY.videoHeight);
+    const span = Math.max(1, sw - W);                   // 하늘이 움직일 수 있는 폭
+    const t = maxX ? camX/maxX : 0;
+    cx.drawImage(SKY, -t*span*SKY_PARALLAX*(span/Math.max(span,1)), 0, sw, sh);
+  }
+
+  /* 땅 — 위쪽이 투명해서 하늘이 비친다 */
+  if(ready) cx.drawImage(LAND, -camX, 0, lwT, H);
+
+  /* 냥이 — 뒤에 있는 아이(v가 작은)부터 그려야 앞엣것이 위에 온다 */
+  const tt=(performance.now()-t0)/1000;
+  const dt=Math.min(.12, Math.max(0, tt-lastT)); lastT=tt;   // 지난 그림과의 시간차
+  const hz=H*HORIZON;                       // 화면에서의 지평선
+  const base=CAT_AT_HOUSE/((.86-HORIZON)/(1-HORIZON));   // 원근 기준값
+  /* 소품 — 뒤에 있는 것(v가 작은)부터. 냥이보다 먼저 그려 냥이가 앞에 서게 한다 */
+  for(const p of [...PROPSET, ...BUILDINGS.filter(b=>!b.held).map(b=>({n:b.n,u:b.u,v:b.v,f:1,_b:b}))].sort((a,b)=>a.v-b.v)){
+    const P=p._b ? p._b : PROPS[p.n]; if(!P||!P.im.complete||!P.im.naturalWidth) continue;
+    if(p._b){ p._b._box=null; }
+    const py=p.v*H, pd=(py-hz)/(H-hz); if(pd<=0) continue;
+    const ph=base*pd*P.크기, pw=ph*P.im.naturalWidth/P.im.naturalHeight;
+    const px=p.u*lw-camX-pw/2;
+    if(px<-pw-pad||px>W+pad) continue;
+    /* 발밑 그림자 — 물체보다 넓게 깔아야 가장자리가 삐져나와 「땅에 붙었다」가 된다.
+       가운데를 진하게, 바깥으로 갈수록 옅게(실제 접지 그림자가 그렇다). */
+    if(false){   // 모든 소품이 그림 안에 그림자를 갖고 있다 — 코드 그림자는 쓰지 않는다
+      cx.save();
+      cx.translate(px+pw/2, py+ph*.012); cx.scale(1,.17);
+      const g=cx.createRadialGradient(0,0,pw*.10,0,0,pw*.56);
+      g.addColorStop(0,"rgba(0,0,0,.45)"); g.addColorStop(.55,"rgba(0,0,0,.26)");
+      g.addColorStop(1,"rgba(0,0,0,0)");
+      cx.fillStyle=g; cx.beginPath(); cx.arc(0,0,pw*.56,0,7); cx.fill(); cx.restore();
+    }
+    // 🔴 그림 바닥이 아니라 「실제 바닥」을 땅에 맞춘다. 뒤집힌 것은 가운데를 축으로 좌우를 바꾼다
+    cx.save(); if((p.f||1)<0){ cx.translate(px+pw/2,0); cx.scale(-1,1); cx.translate(-(px+pw/2),0); }
+    cx.drawImage(P.im, px, py-ph*P.바닥, pw, ph); cx.restore();
+    if(p._b) p._b._box={x:px, y:py-ph*P.바닥, w:pw, h:ph};
+    else p._box={x:px, y:py-ph*P.바닥, w:pw, h:ph};        // 누른 자리에 이 소품이 있나 보려고
+  }
+
+  for(const c of [...CATS].sort((a,b)=>a.v-b.v)){
+    if(c.held) continue;                                   // 들려 있는 아이는 손에서 그린다
+    step(c, tt, dt);
+    const y=c.v*H;                          // 발이 닿는 높이
+    const d=(y-hz)/(H-hz);                  // 0=지평선, 1=화면 맨 앞
+    if(d<=0) continue;
+    const 키=base*d*c.big;                  // 이 자리에서 냥이 「키」는 얼마인가
+
+    /* 걷는 중이고 걷기 그림이 다 왔으면 → 연속 그림으로 걷는다 */
+    const wk = (c.walk===1) ? WALK[c.n] : null;
+    const 걷기가능 = wk && wk.im.every(i=>i.complete&&i.naturalWidth);
+    let im, hgt, wid, 섞을그림=null, 섞기=0;
+    if(걷기가능){
+      /* 🔴 AI 가 만든 걷기는 처음과 끝이 딱 안 맞는다(고양이가 내내 머리를 움직인다).
+         그냥 되감으면 **머리가 획 돌아간다**(대표님: 「병자들 모습같아」).
+         그래서 끝 몇 장 동안 첫 장이 서서히 겹쳐 나타나게 해서 녹여 잇는다. */
+      const fi = (tt*wk.초당) % wk.n, i0 = Math.floor(fi);
+      const fs = wk.n - wk.페이드;
+      im  = wk.im[i0];
+      if(i0 >= fs){ 섞을그림 = wk.im[i0-fs]; 섞기 = (i0-fs+1)/wk.페이드; }
+      hgt = 키*wk.배율;
+      wid = hgt*wk.가로비;                   // 망치만 눌러서 통통하게(0.905)
+    } else {
+      im  = poseImg(c, c.pose);
+      if(!im || !im.complete || !im.naturalWidth) continue;
+      hgt = 키;
+      wid = hgt*im.naturalWidth/im.naturalHeight;
+    }
+    const x=c.u*lw-camX-wid/2;
+    if(x<-wid-pad||x>W+pad) continue;
+
+    /* 걷기 그림에는 발놀림이 이미 들어 있다. 사진으로 걸을 때만 들썩이게 한다. */
+    const hop = (c.walk && !걷기가능) ? Math.abs(Math.sin(tt*(c.walk>1?13:7)))*hgt*(c.walk>1?.09:.035)
+              : (c.walk>1 ? Math.abs(Math.sin(tt*13))*hgt*.09 : 0);
+
+    // 그림자 — 발밑에 눕힌 타원. 몸이 뜨면 그림자는 작고 옅어진다.
+    const lift = hop/Math.max(hgt,1);
+    cx.save(); cx.globalAlpha=.3*(1-lift*2.2); cx.fillStyle="#000";
+    cx.translate(x+wid/2,y); cx.scale(1,.2);
+    cx.beginPath(); cx.arc(0,0,키*.52*(1-lift*1.6),0,7); cx.fill(); cx.restore();
+
+    // 가는 쪽을 바라보게 — 왼쪽으로 가면 그림을 뒤집는다
+    cx.save();
+    if(c.face<0){ cx.translate(x+wid/2,0); cx.scale(-1,1); cx.translate(-(x+wid/2),0); }
+    // 걷기 그림은 아래에 여백이 있다 → 그림 바닥이 아니라 「발끝」을 땅에 맞춘다
+    if(걷기가능){
+      const ty = y-hgt*wk.발끝-hop;
+      cx.drawImage(im, x, ty, wid, hgt);                 // 이미 살아 움직인다
+      if(섞을그림){                                       // 루프가 이어지는 자리 — 녹여 잇는다
+        cx.globalAlpha = 섞기;
+        cx.drawImage(섞을그림, x, ty, wid, hgt);
+        cx.globalAlpha = 1;
+      }
+    }
+    else breathe(im, x, y-hgt-hop, wid, hgt, c.ph, tt, (c.wagUntil||0)-tt);
+    cx.restore();
+    c._box={x, y:y-hgt-hop, w:wid, h:hgt+hop};       // 누른 자리에 이 아이가 있나 보려고
+  }
+
+  /* 쓰다듬은 자리에서 ♥ 가 떠오른다 — 1.4초 뒤 사라진다 */
+  for(let i=HEARTS.length-1;i>=0;i--){
+    const h=HEARTS[i], a=tt-h.t0; if(a<0) continue; if(a>1.4){ HEARTS.splice(i,1); continue; }
+    const b=h.c._box; if(!b) continue;
+    const hx=b.x+b.w*.5, hy=b.y - 6 - a*38;
+    cx.save(); cx.globalAlpha=Math.max(0, 1-a/1.4); cx.fillStyle="#ff8fa3";
+    cx.font="bold "+Math.round(Math.max(20, b.h*.26))+"px sans-serif"; cx.textAlign="center";
+    cx.fillText("♥", hx, hy); cx.restore();
+  }
+
+  if(mode && mode.cat){                                    // 들린 냥이 — 손가락을 따라오는 앉은 사진, 발밑에 초록/빨강 타원
+    const c=mode.cat, {u,v}=toUV(mode.x,mode.y), im=c.im0;
+    if(im.complete&&im.naturalWidth && v>hz/H){
+      const d=(v*H-hz)/(H-hz), 키=base*d*c.big, wid=키*im.naturalWidth/im.naturalHeight;
+      const ok = !(v<놓기.v0||v>놓기.v1||u<놓기.u0||u>땅끝u()-.05||u>열린끝()-.01);
+      cx.save(); cx.globalAlpha=.35; cx.fillStyle= ok? "#7CFF9A" : "#FF6B6B";
+      cx.translate(mode.x, v*H); cx.scale(1,.22); cx.beginPath(); cx.arc(0,0,키*.55,0,7); cx.fill(); cx.restore();
+      cx.save(); cx.globalAlpha=.92; cx.drawImage(im, mode.x-wid/2, v*H-키, wid, 키); cx.restore();
+    }
+  }
+  else if(mode){
+    const {u,v}=toUV(mode.x,mode.y); const P=mode.building||PROPS[mode.n];
+    const 먹는아이 = mode.n.startsWith("츄르") ? 얼굴위냥이(mode.x,mode.y) : null;
+    if(먹는아이){
+      먹이기(먹는아이, tt);
+      if(P.im.complete&&P.im.naturalWidth){
+        const b=먹는아이._box, ph=b.h*.42, pw=ph*P.im.naturalWidth/P.im.naturalHeight;
+        cx.save(); cx.globalAlpha=.95; cx.drawImage(P.im, mode.x-pw/2, mode.y-ph*.5, pw, ph); cx.restore();
+      }
+    }
+    else {
+    const ok=mode.building? 건물놓을수있나(mode.building,u,v) : 놓을수있나(mode.n,u,v,null), 넣기=false;
+    // 놓을 수 있는 땅(띠) — 밝게. 못 놓는 자리를 눌렀으면 잠깐 붉게 깜빡인다
+    {
+      const flash = mode.bad && performance.now()-mode.bad < 500;
+      cx.save(); cx.globalAlpha = flash ? .28 : .13; cx.fillStyle = flash ? "#ff6b6b" : "#ffd36e";
+      cx.fillRect(-pad, 놓기.v0*H, W+pad*2, (놓기.v1-놓기.v0)*H);
+      cx.globalAlpha = .5; cx.strokeStyle = flash ? "#ff6b6b" : "#ffd36e"; cx.lineWidth = 2; cx.setLineDash([12,10]);
+      cx.beginPath(); cx.moveTo(-pad, 놓기.v0*H); cx.lineTo(W+pad, 놓기.v0*H); cx.stroke(); cx.restore();
+    }
+    // (창고 반납 점선은 없앴다 — 9/16)
+    if(P.im.complete&&P.im.naturalWidth && v>hz/H){
+      const d=(v*H-hz)/(H-hz), ph=base*d*P.크기, pw=ph*P.im.naturalWidth/P.im.naturalHeight;
+      const x=mode.x-pw/2, y=v*H;
+      cx.save(); cx.globalAlpha=.35; cx.fillStyle= 넣기? "#ffd36e" : ok? "#7CFF9A" : "#FF6B6B";
+      cx.translate(x+pw/2,y); cx.scale(1,.22); cx.beginPath(); cx.arc(0,0,pw*.55,0,7); cx.fill(); cx.restore();
+      cx.save(); cx.globalAlpha=.9;
+      if((mode.f||1)<0){ cx.translate(x+pw/2,0); cx.scale(-1,1); cx.translate(-(x+pw/2),0); }
+      cx.drawImage(P.im, x, y-ph*P.바닥, pw, ph); cx.restore();
+    }
+    }
+  }
+  /* 잠긴 구역 — 어둡게 가리고 경계에 점선 */
+  if(끝 < 땅끝u()-.001){
+    const bx = 끝*lw - camX;
+    if(bx < W+pad){
+      cx.save(); cx.fillStyle="rgba(7,6,26,.72)"; cx.fillRect(bx, 0, W+pad-bx+10, H);
+      cx.strokeStyle="#ffd36e"; cx.globalAlpha=.6; cx.lineWidth=2; cx.setLineDash([12,10]);
+      cx.beginPath(); cx.moveTo(bx, hz*.9); cx.lineTo(bx, H); cx.stroke(); cx.restore();
+    }
+  }
+  cx.restore();                                            // 🔍 세계 끝
+  /* 팻말 — 경계가 화면에 들어오면 뜬다 */
+  {
+    const k=열린수(), next=ZONES_사용()[k];
+    const bxs = (끝*lw - camX - W/2)*ZOOM + W/2;             // 경계의 화면 x
+    if(next && bxs < W+40 && !mode){
+      zoneBtn.hidden=false;
+      zoneBtn.innerHTML = "🔒 "+next.n+" 열기<small>🪙 "+next.cost.toLocaleString()+" · 지금 "+((마을읽기().coin|0)).toLocaleString()+"</small>";
+    } else zoneBtn.hidden=true;
+    const cu=(camX+W/2)/lw; const here=ZONES.find(z=>cu<=z.u1)||ZONES[ZONES.length-1];
+    zoneName.textContent="그르릉 행성 · "+here.n;
+  }
+  posEl.textContent = (maxX? Math.round(camX/maxX*100):0) + "%";
+  const f = W/Math.max(lwT,1);
+  knob.style.width = (f*100)+"%";
+  knob.style.left  = (maxX? camX/maxX*(100-f*100):0)+"%";
+  requestAnimationFrame(draw);
+}
+fit(); requestAnimationFrame(draw);
+</script>
+<script src="유전.js"></script>   <!-- 5단계 유전·번식 (놀대리 9/16) -->
+</html>
