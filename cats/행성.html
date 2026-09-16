@@ -1244,7 +1244,8 @@ function draw(){
   for(const c of [...CATS].sort((a,b)=>a.v-b.v)){
     if(c.held) continue;                                   // 들려 있는 아이는 손에서 그린다
     step(c, tt, dt);
-    if(c.perch && (!PROPSET.includes(c.perch.p) || !c.perch.p._box)) 침대내려오기(c, tt, true);   // 캣타워가 치워졌다
+    if(c.perch && !PROPSET.includes(c.perch.p)) 침대내려오기(c, tt, true);   // 캣타워가 치워졌다
+    if(c.perch && tt>=c.perch.at && !c.perch.p._box) continue;              // 그림이 아직 안 왔다 — 잠깐 안 보인다
     if(c.perch && tt>=c.perch.at){                          // 침대 위: 캣타워 그림의 그 자리에, 그 크기로
       const b=c.perch.p._box, sp=앉는자리[c.perch.p.n][c.perch.k];
       const im=poseImg(c, c.walk? 기본 : c.pose); if(!im||!im.complete||!im.naturalWidth) continue;
