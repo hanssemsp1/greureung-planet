@@ -103,6 +103,7 @@
   .it:hover{background:#ffffff22}
   .it img{width:64px;height:64px;object-fit:contain;display:block;margin:0 auto 2px}
   .it.none{opacity:.35;cursor:default}
+  .it.lock img{filter:grayscale(1) brightness(.6)}
   .it .price{display:block;font-size:10px;color:#ffd36e;margin-top:1px}
   .it.shop.poor{opacity:.5}
   .it.shop.poor .price{color:#ff8f8f}
@@ -818,7 +819,7 @@ function 코인갱신(){
 addEventListener("storage",e=>{ if(e.key===TOWN_KEY) 코인갱신(); });
 /* 장인 주소 — 만드는 사람(대표님)은 코인을 벌 필요가 없다(9/16: 「포인트가 없어서 소품을 뺄 수가 없어」).
    주소 뒤에 ?장인 을 붙여 한 번 열면 코인 100,000 이 채워진다. 딸들에겐 알려주지 말 것 😺 */
-try{ if(/[?&]장인|[?&]%EC%9E%A5%EC%9D%B8|[?&]maker/.test(location.search)){ const t=마을읽기(); t.coin=100000; 마을쓰기(t); setTimeout(()=>안내("🛠 장인 모드 — 코인 100,000 채웠어요"), 800); history.replaceState(null,"",location.pathname); } }catch(e){}
+try{ if(/[?&]장인|[?&]%EC%9E%A5%EC%9D%B8|[?&]maker/.test(location.search)){ const t=마을읽기(); t.coin=100000; t.maker=true; 마을쓰기(t); setTimeout(()=>안내("🛠 장인 모드 — 코인 100,000 채웠어요"), 800); history.replaceState(null,"",location.pathname); } }catch(e){}
 코인갱신();
 /* 처음 소개 — 처음 한 번만. 「?」로 다시 */
 const intro=document.getElementById("intro");
@@ -942,20 +943,28 @@ const 상점종류=[
   ["관공서",   n=>/^(천문대|부엌|소방서|법원|경찰서|병원|학교)/.test(n)],
   ["밭",       n=>/^밭_/.test(n)],
 ];
+/* 대표님 9/16: 「레벨에 따라 노출되는 소품의 수를 정하자」 — 퍼즐 레벨이 오를수록 싼 것부터 차례로 열린다.
+   레벨 1에 10개, 한 레벨마다 2개씩 → 88개는 레벨 40쯤에 다 열린다. 다음에 열릴 것 두 개는 자물쇠로 보여 준다 (「저건 언제 열리지」) */
+const 퍼즐레벨=()=>{ try{ return Math.max(1, (JSON.parse(localStorage.getItem("nyangi_arrows_v1")||"{}").lv|0)||1); }catch(e){ return 1; } };
+const 열리는레벨=i=>Math.max(1, Math.ceil((i+1-8)/2));          // 값 순서 i번째(0부터)가 열리는 레벨
 let 상점칸=0;
 const catsEl=document.getElementById("cats");
 function 상점열기(){
   const t=가진것(), coin=t.coin|0;
-  const 모두=Object.keys(PROPS).sort((a,b)=>값(a)-값(b));          // 다 판다 — 같은 걸 여러 개 살 수 있다
-  const 종류=상점종류.filter(([,ok])=>모두.some(ok));
+  const 값순=Object.keys(PROPS).sort((a,b)=>값(a)-값(b));          // 같은 걸 여러 개 살 수 있다
+  const lv=퍼즐레벨(), 열린수=t.maker ? 값순.length : Math.min(값순.length, 8+2*lv);
+  const 모두=값순.slice(0,열린수), 잠긴=값순.slice(열린수).map((n,j)=>({n, lv:열리는레벨(열린수+j)}));
+  const 종류=상점종류.filter(([,ok])=>모두.some(ok)||잠긴.some(x=>ok(x.n)));
   if(상점칸>=종류.length) 상점칸=0;
   catsEl.innerHTML=종류.map(([k],i)=>'<button data-k="'+i+'"'+(i===상점칸?' class="on"':'')+'>'+k+'</button>').join("");
   catsEl.hidden=false;
   const shop=모두.filter(종류[상점칸][1]);
   const placed={}; for(const p of PROPSET) placed[p.n]=(placed[p.n]||0)+1;
-  ptitle.textContent="🪙 "+coin.toLocaleString()+" 있어요 · 누를 때마다 하나씩 사요"; 탭표시("shop");
+  ptitle.textContent="🪙 "+coin.toLocaleString()+" · 레벨 "+lv+" · 소품 "+열린수+"/"+값순.length+(열린수<값순.length?" (🧩 놀이 레벨이 오르면 더 열려요)":""); 탭표시("shop");
+  const 다음=잠긴.filter(x=>종류[상점칸][1](x.n)).slice(0,2);
   items.innerHTML = shop.map(n=>{ const own=(t.inv[n]|0)+(placed[n]||0);
-    return '<div class="it shop'+(coin<값(n)?' poor':'')+'" data-shop="'+n+'"><img src="소품/'+n+'_그림자.png" alt="">'+label(n)+'<span class="price">🪙 '+값(n).toLocaleString()+(own?' · 보유 '+own:'')+'</span></div>'; }).join("");
+    return '<div class="it shop'+(coin<값(n)?' poor':'')+'" data-shop="'+n+'"><img src="소품/'+n+'_그림자.png" alt="">'+label(n)+'<span class="price">🪙 '+값(n).toLocaleString()+(own?' · 보유 '+own:'')+'</span></div>'; }).join("")
+    + 다음.map(x=>'<div class="it none lock"><img src="소품/'+x.n+'_그림자.png" alt="">'+label(x.n)+'<span class="price">🔒 레벨 '+x.lv+'</span></div>').join("");
   panel.hidden=false; hide();
 }
 catsEl.addEventListener("click",e=>{ const b=e.target.closest("button[data-k]"); if(!b) return; 상점칸=+b.dataset.k; 상점열기(); });
