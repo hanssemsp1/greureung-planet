@@ -1142,9 +1142,11 @@ function draw(){
     cx.translate(x+wid/2,y); cx.scale(1,.2);
     cx.beginPath(); cx.arc(0,0,키*.52*(1-lift*1.6),0,7); cx.fill(); cx.restore();
 
-    // 가는 쪽을 바라보게 — 왼쪽으로 가면 그림을 뒤집는다
+    // 가는 쪽을 바라보게 — 왼쪽으로 「걷는 동안만」 그림을 뒤집는다.
+    // 대표님 9/16: 「문대 얼굴의 검은 털이 좌우로 변해」 — 사진을 뒤집으면 얼룩이 반대쪽으로 간다.
+    // 서 있을 땐 늘 원래 사진 그대로. (걷는 왼쪽 방향까지 맞추려면 왼쪽 보는 사진을 따로 뽑아야 한다)
     cx.save();
-    if(c.face<0){ cx.translate(x+wid/2,0); cx.scale(-1,1); cx.translate(-(x+wid/2),0); }
+    if(c.face<0 && c.walk && 걷기가능){ cx.translate(x+wid/2,0); cx.scale(-1,1); cx.translate(-(x+wid/2),0); }
     // 걷기 그림은 아래에 여백이 있다 → 그림 바닥이 아니라 「발끝」을 땅에 맞춘다
     if(걷기가능){
       const ty = y-hgt*wk.발끝-hop;
