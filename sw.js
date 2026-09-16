@@ -1,7 +1,7 @@
 /* 그르릉 행성 — 홈 화면 앱용 저장 장치 (1단계 PWA, 9/16)
    · html·js 는 「인터넷 먼저」 — 새로 올린 게 바로 보이고, 끊겼을 땐 저장본
    · 그림·영상은 「저장본 먼저」 — 두 번째부터 로딩 없이, 없을 때만 받아서 저장 */
-const CACHE = "greureung-v1";
+const CACHE = "greureung-v2";
 self.addEventListener("install", e => { self.skipWaiting(); });
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
