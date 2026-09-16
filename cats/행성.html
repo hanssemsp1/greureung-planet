@@ -401,8 +401,9 @@ const BUILDINGS=[ { n:"상점", im:load("소품/상점_그림자.png"), u:.556, 
 ];
 let 건물옮기기=false;   // (아래 지갑 코드 뒤에서 장인이면 true) 못 박았다. 장인 주소(?maker)로 열면 창고 선명판만 꾹 눌러 끌 수 있다 (대표님 9/16: 「창고 조금 더 옮기면 맞을 것 같은데」)
 /* 대표님 9/16: 「숫자 외우기가 힘들다」 → 놓을 때마다 숫자를 복사해 둔다. 채팅에 Ctrl+V 만 하면 된다 */
+const 건물이름=b=> b.n==="창고선명" ? "창고" : b.n;
 function 창고숫자복사(b){
-  const txt="창고 세로 "+b.크기.toFixed(2)+" · 가로 "+(b.가로||1).toFixed(2)+" · u "+b.u.toFixed(3)+" · v "+b.v.toFixed(3);
+  const txt=건물이름(b)+" 세로 "+b.크기.toFixed(2)+" · 가로 "+(b.가로||1).toFixed(2)+" · u "+b.u.toFixed(3)+" · v "+b.v.toFixed(3);
   try{ navigator.clipboard.writeText(txt).then(()=>안내("📋 복사됐어요 — 마음에 들면 놀대리 채팅에 Ctrl+V (붙여넣기)만 하세요 · "+txt), ()=>안내(txt)); }catch(e){ 안내(txt); }
 }
 function 건물저장(){ const t=마을읽기(); t.buildings=t.buildings||{}; for(const b of BUILDINGS) t.buildings[b.n]={u:b.u,v:b.v,크기:b.크기,가로:b.가로||1}; 마을쓰기(t); }
@@ -761,8 +762,8 @@ cv.addEventListener("pointerdown",e=>{
   }
   const {x:X,y:Y}=toWorld(e.clientX,e.clientY);
   /* 장인: 창고 오른쪽 위 노란 손잡이를 잡고 대각선으로 끌면 커지고 작아진다 (대표님 9/16: 「대각선으로 조금만 늘리면」). 바닥 가운데는 그대로 */
-  if(건물옮기기 && !mode){ const b=BUILDINGS.find(b=>b.n==="창고선명"); const bx=b&&b._box;
-    if(bx){ const R=28/ZOOM; let kind=null;
+  if(건물옮기기 && !mode) for(const b of BUILDINGS){ const bx=b._box; if(!bx) continue;
+    { const R=28/ZOOM; let kind=null;
       if(Math.hypot(X-(bx.x+bx.w), Y-bx.y) < R) kind="both";               // 모서리: 가로·세로 같이
       else if(Math.hypot(X-(bx.x+bx.w), Y-(bx.y+bx.h/2)) < R) kind="w";   // 오른쪽 가장자리: 가로만
       else if(Math.hypot(X-(bx.x+bx.w/2), Y-bx.y) < R) kind="h";          // 위 가장자리: 세로만
@@ -772,12 +773,12 @@ cv.addEventListener("pointerdown",e=>{
   if(mode){ mode.x=X; mode.y=Y; return; }
   const hit=소품찾기(X,Y);
   pressed={x:X,y:Y,hit,moved:false,cat:냥이찾기(X,Y)};
-  let bld = 건물옮기기 && hit<0 && !pressed.cat ? 건물찾기(X,Y) : null; if(bld && bld.n!=="창고선명") bld=null;   // 상점은 못 박은 대로
+  const bld = 건물옮기기 && hit<0 && !pressed.cat ? 건물찾기(X,Y) : null;   // 장인은 상점·창고 둘 다 옮긴다 (대표님 9/16: 「상점도 조금 키우고 앞으로 당겨야」)
   if(bld){                                                // 건물: 0.5초 꾹 누르면 들린다 (톡은 열기)
     pressed.building=bld;
     pressed.timer=setTimeout(()=>{ if(!pressed||pressed.moved||pressed.building!==bld) return;
       bld.held=true; mode={n:bld.n, building:bld, from:null, x:pressed.x, y:pressed.y, x0:pressed.x, y0:pressed.y, fresh:true, f:1}; cv.style.cursor="crosshair";
-      drag=null; cv.classList.remove("drag"); 안내("창고를 들었어요 — 놓고 싶은 자리에 톡 놓으세요 (조금씩: 놓은 뒤 다시 꾹 눌러 끌기)"); }, 500);
+      drag=null; cv.classList.remove("drag"); 안내(건물이름(bld)+"을 들었어요 — 놓고 싶은 자리에 톡 놓으세요 (조금씩: 놓은 뒤 다시 꾹 눌러 끌기)"); }, 500);
   }
   if(hit<0){ drag={x:X, c:camX}; cv.classList.add("drag"); }
 });
@@ -786,7 +787,7 @@ cv.addEventListener("pointermove",e=>{
   if(pinch && pointers.size>=2){ 확대(pinch.z0 * 핀치거리()/Math.max(1,pinch.d0)); hide(); return; }
   const {x:X,y:Y}=toWorld(e.clientX,e.clientY);
   if(mode && mode.resize){ const m=mode, b=m.resize;
-    if(m.kind!=="w") b.크기=Math.max(3, Math.min(7, m.k0*Math.max(1,m.ay-Y)/m.h0));        // 세로: 바닥에서 손가락까지
+    if(m.kind!=="w") b.크기=Math.max(m.k0*.5, Math.min(m.k0*2, m.k0*Math.max(1,m.ay-Y)/m.h0));   // 세로: 바닥에서 손가락까지 (원래의 ½~2배)
     if(m.kind!=="h") b.가로=Math.max(.7, Math.min(1.6, m.g0*Math.max(1,X-m.ax)/m.w0));     // 가로: 가운데에서 손가락까지
     return; }
   if(mode){ mode.x=X; mode.y=Y; return; }
@@ -858,7 +859,7 @@ addEventListener("storage",e=>{ if(e.key===TOWN_KEY) 코인갱신(); });
    주소 뒤에 ?장인 을 붙여 한 번 열면 코인 100,000 이 채워진다. 딸들에겐 알려주지 말 것 😺 */
 try{ if(/[?&]장인|[?&]%EC%9E%A5%EC%9D%B8|[?&]maker/.test(location.search)){ const t=마을읽기(); t.coin=100000; t.maker=true; 마을쓰기(t); setTimeout(()=>안내("🛠 장인 모드 — 코인 100,000 채웠어요"), 800); history.replaceState(null,"",location.pathname); } }catch(e){}
 코인갱신();
-try{ const t=마을읽기(); 건물옮기기=!!t.maker; if(건물옮기기){ const bt=t.buildings||{}; for(const b of BUILDINGS){ if(bt[b.n] && b.n==="창고선명"){ b.u=bt[b.n].u; b.v=bt[b.n].v; if(bt[b.n].크기) b.크기=bt[b.n].크기; if(bt[b.n].가로) b.가로=bt[b.n].가로; } } } }catch(e){}   // 장인은 창고 선명판을 옮길 수 있고, 옮긴 자리를 기억한다
+try{ const t=마을읽기(); 건물옮기기=!!t.maker; if(건물옮기기){ const bt=t.buildings||{}; for(const b of BUILDINGS){ if(bt[b.n]){ b.u=bt[b.n].u; b.v=bt[b.n].v; if(bt[b.n].크기) b.크기=bt[b.n].크기; if(bt[b.n].가로) b.가로=bt[b.n].가로; } } } }catch(e){}   // 장인은 창고 선명판을 옮길 수 있고, 옮긴 자리를 기억한다
 /* 처음 소개 — 처음 한 번만. 「?」로 다시 */
 const intro=document.getElementById("intro");
 function 소개열기(){ intro.hidden=false; }
@@ -1119,7 +1120,7 @@ function draw(){
     cx.save(); if((p.f||1)<0){ cx.translate(px+pw/2,0); cx.scale(-1,1); cx.translate(-(px+pw/2),0); }
     cx.drawImage(P.im, px, py-ph*P.바닥, pw, ph); cx.restore();
     if(p._b) p._b._box={x:px, y:py-ph*P.바닥, w:pw, h:ph};
-    if(p._b && 건물옮기기 && p._b.n==="창고선명"){ const bb=p._b._box; cx.save(); cx.fillStyle="#ffd36e"; cx.strokeStyle="#3b2a00"; cx.lineWidth=2;
+    if(p._b && 건물옮기기){ const bb=p._b._box; cx.save(); cx.fillStyle="#ffd36e"; cx.strokeStyle="#3b2a00"; cx.lineWidth=2;
       const H3=[[bb.x+bb.w, bb.y, "⤡"], [bb.x+bb.w, bb.y+bb.h/2, "↔"], [bb.x+bb.w/2, bb.y, "↕"]];
       for(const [hx,hy,ch] of H3){ cx.fillStyle="#ffd36e"; cx.fillRect(hx-10, hy-10, 20, 20); cx.strokeRect(hx-10, hy-10, 20, 20); cx.fillStyle="#3b2a00"; cx.font="bold 13px sans-serif"; cx.textAlign="center"; cx.fillText(ch, hx, hy+5); }
       cx.restore(); }
