@@ -400,6 +400,11 @@ const BUILDINGS=[ { n:"상점", im:load("소품/상점_그림자.png"), u:.556, 
   { n:"창고선명", im:load("소품/창고_선명.png"), u:.645, v:.903, 크기:4.68, 바닥:0.878, 장식:true, 열기:()=>창고열기() },
 ];
 let 건물옮기기=false;   // (아래 지갑 코드 뒤에서 장인이면 true) 못 박았다. 장인 주소(?maker)로 열면 창고 선명판만 꾹 눌러 끌 수 있다 (대표님 9/16: 「창고 조금 더 옮기면 맞을 것 같은데」)
+/* 대표님 9/16: 「숫자 외우기가 힘들다」 → 놓을 때마다 숫자를 복사해 둔다. 채팅에 Ctrl+V 만 하면 된다 */
+function 창고숫자복사(b){
+  const txt="창고 세로 "+b.크기.toFixed(2)+" · 가로 "+(b.가로||1).toFixed(2)+" · u "+b.u.toFixed(3)+" · v "+b.v.toFixed(3);
+  try{ navigator.clipboard.writeText(txt).then(()=>안내("📋 복사됐어요 — 마음에 들면 놀대리 채팅에 Ctrl+V (붙여넣기)만 하세요 · "+txt), ()=>안내(txt)); }catch(e){ 안내(txt); }
+}
 function 건물저장(){ const t=마을읽기(); t.buildings=t.buildings||{}; for(const b of BUILDINGS) t.buildings[b.n]={u:b.u,v:b.v,크기:b.크기,가로:b.가로||1}; 마을쓰기(t); }
 const 건물찾기=(x,y)=>BUILDINGS.find(b=>!b.held && b._box && x>=b._box.x && x<=b._box.x+b._box.w && y>=b._box.y && y<=b._box.y+b._box.h);
 /* 대표님(9/16): 창고 나무 옆에 세우려는데 「창고 자리」 규칙에 막혔다 → 「자리만 풀어줘」.
@@ -716,7 +721,7 @@ function 놓기끝(x,y){
     const b=mode.building;
     if(!건물놓을수있나(b,u,v)){ 안내("여기엔 못 세워요 — 밝은 띠 안의 빈 땅에 세워 주세요 (그만두려면 ✕)"); mode.bad=performance.now(); return; }
     b.u=u; b.v=v; b.held=false; 건물저장(); mode=null; cv.style.cursor="grab";
-    안내("창고 자리 u "+u.toFixed(3)+" · v "+v.toFixed(3)+" — 마음에 들면 이 숫자를 놀대리에게 알려 주세요, 못 박아 드려요"); return;
+    창고숫자복사(b); return;
   }
   if(mode.n.startsWith("츄르") && 얼굴위냥이(x,y)){
     if(mode.from) PROPSET.push(mode.from);           // 땅에서 들고 온 츄르는 원래 자리로
@@ -811,7 +816,7 @@ cv.addEventListener("pointerup",e=>{
   if(pinch){ if(pointers.size<2){ pinch=null; } pressed=null; drag=null; return; }
   const {x:X,y:Y}=toWorld(e.clientX,e.clientY);
   if(mode && mode.resize){ const b=mode.resize; 건물저장(); mode=null; cv.style.cursor="grab"; pressed=null; drag=null;
-    안내("창고 세로 "+b.크기.toFixed(2)+" · 가로 "+(b.가로||1).toFixed(2)+" · u "+b.u.toFixed(3)+" · v "+b.v.toFixed(3)+" — 마음에 들면 이 숫자를 놀대리에게 알려 주세요"); return; }
+    창고숫자복사(b); return; }
   if(mode){
     /* 꾹 눌러 든 직후 손을 떼면(안 움직였으면) 놓지 않고 계속 든다 — 그다음 원하는 자리를 누르면 놓인다 */
     if(mode.building && mode.fresh && Math.hypot(X-mode.x0, Y-mode.y0)<8){ mode.fresh=false; pressed=null; drag=null; cv.classList.remove("drag"); return; }
