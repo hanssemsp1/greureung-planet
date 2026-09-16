@@ -543,7 +543,11 @@ function 빈침대찾기(c){                                  // 가까운 놀�
   for(const p of PROPSET){ const kind=놀거리종류(p.n); if(!kind) continue; if(p.u>열린끝()-.02 || Math.abs(p.u-c.u)>.28) continue;
     if(kind==="침대"){ const sp=앉는자리[p.n]; if(!sp) continue; p._taken=p._taken||{}; for(let k=0;k<sp.length;k++) if(!p._taken[k] || p._taken[k]===c.n) 후보.push({p,k,kind}); }
     else 후보.push({p,k:0,kind}); }
-  return 후보.length ? 후보[Math.random()*후보.length|0] : null;
+  if(!후보.length) return null;
+  /* 대표님 9/17: 「스크래처·밥상은 안 먹어」 — 캣타워는 침대가 여러 개라 후보가 많아 늘 캣타워만 골랐다.
+     → 종류(침대·긁기·놀기·먹기)를 먼저 고르고, 그 종류 안에서 하나를 고른다 */
+  const 종류들=[...new Set(후보.map(x=>x.kind))]; const kind=종류들[Math.random()*종류들.length|0];
+  const 같은=후보.filter(x=>x.kind===kind); return 같은[Math.random()*같은.length|0];
 }
 function 침대내려오기(c, tt, 점프){                       // 침대에서 떠난다 (내려오기·불림·들림·소품 치움)
   if(!c.perch) return;
@@ -564,7 +568,7 @@ function decide(c, tt){
     c.mood=Math.min(1, c.mood+(하는일[c.act.kind]||{기분:0}).기분); c.act=null;
   }
   // 심심하면 놀거리로 (놓인 게 있을 때만) — 캣타워·스크래처·놀이터·밥상
-  if(Math.random() < .30){ const g=빈침대찾기(c);
+  if(Math.random() < .45){ const g=빈침대찾기(c);
     if(g){ if(g.kind==="침대") g.p._taken[g.k]=c.n;
       const 옆=(하는일[g.kind]||{옆:0}).옆 * (Math.random()<.5?-1:1);
       c.goal=g; c.tu=g.p.u + 옆 + (Math.random()-.5)*.01; c.walk=1; c.pose="서기"; c.until=tt+25; return; } }
