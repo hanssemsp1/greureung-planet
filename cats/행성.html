@@ -177,7 +177,7 @@ function fit(){
 addEventListener("resize",fit);
 
 /* 땅 — 넓힌 그림. 위쪽은 투명해서 하늘 영상이 비쳐 보인다. */
-const LAND=new Image(); LAND.src="배경/땅.png";
+const LAND=new Image(); LAND.src="배경/땅.webp";   // 9/16: png 10.7MB → webp 1.3MB (폰 로딩). 원본 png는 그대로 둔다
 /* 하늘 — 20초 무한 루프 */
 const SKY=document.createElement("video");
 SKY.src="배경/하늘.mp4"; SKY.muted=true; SKY.loop=true;
@@ -366,7 +366,8 @@ const PROPS={
   밭_옥수수: {크기:1.8, 바닥:0.917},
   밭_고구마: {크기:1.8, 바닥:0.8},
 };
-for(const k in PROPS) PROPS[k].im=load("소품/"+k+"_그림자.png");
+/* 소품 그림은 「쓸 때」 불러온다 — 88장 115MB를 처음부터 다 받으면 폰에서 로딩이 오래 걸린다 (대표님 9/16: 「로딩이 좀 걸리나」) */
+for(const k in PROPS) Object.defineProperty(PROPS[k],"im",{ get(){ return this._im || (this._im=load("소품/"+k+"_그림자.png")); } });
 /* ── 건물 (9/16) ─────────────────────────────────────────────
    상점 = 대표님이 GPT로 만드신 그림(소품/상점_원본.png)에 확정 방식(sunburst --edit)으로 바닥 그림자만 붙인 것.
    창고처럼 마을의 붙박이다 — 옮기지도 뒤집지도 못하고, 톡 누르면 🛒 상점이 열린다.
