@@ -9,7 +9,7 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   const req = e.request; if (req.method !== "GET") return;
   const url = new URL(req.url); if (url.origin !== location.origin) return;
-  const code = /\.(html|js|webmanifest)$/.test(url.pathname) || url.pathname.endsWith("/");
+  const code = req.mode === "navigate" || req.destination === "document" || req.destination === "script" || /.(html|js|webmanifest)$/.test(url.pathname) || url.pathname.endsWith("/");
   if (code) {
     e.respondWith(fetch(req).then(r => { const c = r.clone(); caches.open(CACHE).then(k => k.put(req, c)); return r; })
                              .catch(() => caches.match(req, { ignoreSearch: true })));
