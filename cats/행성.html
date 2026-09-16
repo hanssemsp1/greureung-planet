@@ -518,8 +518,56 @@ CATS.forEach((c,i)=>{
 let t0=performance.now(), lastT=0;
 성장갱신();
 
+/* ── 캣타워에 올라가 쉬기 (대표님 9/16: 「캣타워를 사서 놓아주면 냥이들이 올라가서 쉬기도 하고」) ──
+   그림마다 「침대가 어디인지」를 그림 폭·높이의 비율로 적어 둔다. x,y = 냥이 발이 닿는 자리, s = 냥이 키(그림 높이 대비).
+   냥이는 심심할 때 가까운 캣타워의 빈 침대를 골라 걸어가 → 뛰어오르기 → 침대에서 자거나 식빵 → 내려온다. */
+const 앉는자리={
+  캣타워_1:[{x:.58,y:.20,s:.30},{x:.37,y:.78,s:.32}],
+  캣타워_2:[{x:.62,y:.19,s:.28},{x:.30,y:.43,s:.28},{x:.37,y:.82,s:.30}],
+  캣타워_3:[{x:.58,y:.19,s:.22},{x:.66,y:.49,s:.22},{x:.30,y:.60,s:.22},{x:.53,y:.86,s:.26}],
+  캣타워_4:[{x:.58,y:.19,s:.22},{x:.66,y:.49,s:.22},{x:.30,y:.60,s:.22},{x:.53,y:.86,s:.26}],
+  캣타워_5:[{x:.50,y:.27,s:.30},{x:.76,y:.75,s:.28}],
+  캣타워_6:[{x:.55,y:.22,s:.30},{x:.52,y:.86,s:.30}],
+  캣타워_7:[{x:.42,y:.16,s:.20},{x:.73,y:.40,s:.20},{x:.51,y:.51,s:.20},{x:.40,y:.87,s:.22}],
+  캣타워_8:[{x:.55,y:.12,s:.18},{x:.36,y:.30,s:.18},{x:.74,y:.63,s:.18}],
+  캣타워_9:[{x:.50,y:.13,s:.12},{x:.50,y:.40,s:.14},{x:.20,y:.53,s:.13},{x:.80,y:.53,s:.13},{x:.50,y:.80,s:.16}],
+  나무_2:[{x:.55,y:.18,s:.20},{x:.32,y:.45,s:.20},{x:.68,y:.54,s:.20},{x:.26,y:.73,s:.20}],
+};
+const 쉬는자세=[...잠, "식빵", "그루밍", "식빵"];
+/* 소품마다 냥이가 뭘 하는지 (대표님 9/16: 「스크래처는 사서 주면 긁기도 하고, 장난감으로 놓아주면 뛰어다니기도 하고」) */
+const 놀거리종류=n=> /^(캣타워|나무_2$)/.test(n) ? "침대" : /^스크래처/.test(n) ? "긁기" : /^(놀이터|발바닥판|방울언덕|무지개산)/.test(n) ? "놀기" : /^(밥상|밥그릇|사료)/.test(n) ? "먹기" : null;
+const 하는일={ 긁기:{poses:["앞발들기","기지개","앞발들기","사냥자세"], 길이:9, 기분:.3, 옆:.03},
+              먹기:{poses:["츄르먹기"], 길이:7, 기분:.25, 옆:.0} };
+function 빈침대찾기(c){                                  // 가까운 놀거리. 캣타워면 빈 침대까지 고른다. 없으면 null
+  const 후보=[];
+  for(const p of PROPSET){ const kind=놀거리종류(p.n); if(!kind) continue; if(p.u>열린끝()-.02 || Math.abs(p.u-c.u)>.28) continue;
+    if(kind==="침대"){ const sp=앉는자리[p.n]; if(!sp) continue; p._taken=p._taken||{}; for(let k=0;k<sp.length;k++) if(!p._taken[k] || p._taken[k]===c.n) 후보.push({p,k,kind}); }
+    else 후보.push({p,k:0,kind}); }
+  return 후보.length ? 후보[Math.random()*후보.length|0] : null;
+}
+function 침대내려오기(c, tt, 점프){                       // 침대에서 떠난다 (내려오기·불림·들림·소품 치움)
+  if(!c.perch) return;
+  const {p,k}=c.perch; if(p._taken && p._taken[k]===c.n) p._taken[k]=null;
+  c.perch=null; c.goal=null;
+  if(점프){ c.pose="뛰어오르기"; c.until=tt+.6; }
+}
 /* 다음에 뭘 할지 고른다 */
 function decide(c, tt){
+  // 침대에 있으면 계속 쉰다 — 시간이 다 되면 내려온다
+  if(c.perch){
+    if(tt < c.perch.until){ c.pose=pick(쉬는자세); c.until=tt+6+Math.random()*9; return; }
+    침대내려오기(c, tt, true); return;
+  }
+  // 하던 일(긁기·먹기)이 남았으면 계속
+  if(c.act){
+    if(tt < c.act.until && PROPSET.includes(c.act.p)){ c.pose=pick(c.act.poses); c.until=tt+1.4+Math.random()*1.6; return; }
+    c.mood=Math.min(1, c.mood+(하는일[c.act.kind]||{기분:0}).기분); c.act=null;
+  }
+  // 심심하면 놀거리로 (놓인 게 있을 때만) — 캣타워·스크래처·놀이터·밥상
+  if(Math.random() < .30){ const g=빈침대찾기(c);
+    if(g){ if(g.kind==="침대") g.p._taken[g.k]=c.n;
+      const 옆=(하는일[g.kind]||{옆:0}).옆 * (Math.random()<.5?-1:1);
+      c.goal=g; c.tu=g.p.u + 옆 + (Math.random()-.5)*.01; c.walk=1; c.pose="서기"; c.until=tt+25; return; } }
   // 우다다 중이면 계속 달린다
   if(c.dash>0){
     c.dash--;
@@ -576,6 +624,7 @@ function 쓰다듬기(c, tt){
 function 이름부르기(n){
   const c=CATS.find(c=>c.n===n); if(!c) return;
   const tt=(performance.now()-t0)/1000;
+  침대내려오기(c, tt, false); c.goal=null; c.act=null;
   let tu=(camX+W/2)/landW();                      // 화면 가운데
   tu=Math.max(.15, Math.min(열린끝()-.04, tu));
   if(c.v<창고자리.v1 && tu>창고자리.u0-.03 && tu<창고자리.u1+.03)
@@ -630,6 +679,7 @@ function 안내(msg){
    자리는 저장된다(그르릉_냥이). 원근 때문에 앞줄에 놓으면 커 보인다 — 그게 맞다.                                */
 function 냥이자리저장(){ try{ const o={}; for(const c of CATS) o[c.n]={u:c.u,v:c.v}; localStorage.setItem("그르릉_냥이", JSON.stringify(o)); }catch(e){} }
 function 냥이놓기(c,u,v){
+  침대내려오기(c, (performance.now()-t0)/1000, false); c.act=null;
   if(v<놓기.v0||v>놓기.v1||u<놓기.u0||u>땅끝u()-.05||u>열린끝()-.01) return false;
   c.u=u; c.tu=u; c.home=u; c.v=v; c.walk=0; c.dash=0; c.called=false; c.pose="서기"; c.until=(performance.now()-t0)/1000+1.5; c.held=false;
   냥이자리저장(); if(c.adopted) 입양저장(); return true;
@@ -653,7 +703,13 @@ function step(c, tt, dt){
     const d = c.tu - c.u;
     if(Math.abs(d) < .006){
       if(c.called) 도착박치기(c,tt);                  // 불러서 온 아이는 툭 박는다
-      else { c.walk=0; c.pose=기본; c.until=tt+.4; }
+      else if(c.goal && PROPSET.includes(c.goal.p)){ // 놀거리 앞
+        const g=c.goal; c.goal=null; c.walk=0;
+        if(g.kind==="침대"){ c.pose="뛰어오르기"; c.until=tt+.65; c.perch={p:g.p, k:g.k, at:tt+.65, until:tt+.65+14+Math.random()*30}; }
+        else if(g.kind==="놀기"){ c.home=g.p.u; c.dash=2+(Math.random()*3|0); c.mood=1; c.pose="사냥자세"; c.until=tt+1; }
+        else { const j=하는일[g.kind]; c.act={kind:g.kind, p:g.p, poses:j.poses, until:tt+j.길이+Math.random()*4}; c.pose=j.poses[0]; c.until=tt+1.5; }
+      }
+      else { c.walk=0; c.pose=기본; c.until=tt+.4; c.goal=null; }
     }
     else { c.u += Math.sign(d)*Math.min(Math.abs(d), spd); c.face = d<0 ? -1 : 1; }
     return;
@@ -848,7 +904,7 @@ cv.addEventListener("pointermove",e=>{
   if(mode){ mode.x=X; mode.y=Y; return; }
   if(pressed && pressed.cat){                                // 냥이를 끌면 들린다
     if(!pressed.moved && Math.hypot(X-pressed.x,Y-pressed.y)>8){
-      pressed.moved=true; const c=pressed.cat; c.held=true; c.walk=0; c.dash=0;
+      pressed.moved=true; const c=pressed.cat; c.held=true; c.walk=0; c.dash=0; 침대내려오기(c,(performance.now()-t0)/1000,false); c.goal=null; c.act=null;
       mode={n:c.n, cat:c, from:null, x:X, y:Y, f:1}; cv.style.cursor="crosshair"; drag=null; cv.classList.remove("drag");
       안내(c.n+"를 들었어요 — 밝은 띠 안에 놓아 주세요. 거기가 "+c.n+"의 새 자리가 돼요");
     }
@@ -1005,7 +1061,7 @@ document.getElementById("bcats").onclick=()=>{ if(mode) return; (panel.hidden||�
    우리 냥이 전부를 카드로. 사진·이름·기분·지금 뭐 하는지·어느 구역. 카드를 누르면 화면이 그 아이에게 간다.
    새 냥이가 생기면 여기가 도감이 된다.                                                          */
 const 기분하트=m=>{ const n=Math.round(Math.max(0,Math.min(1,m))*5); return "♥".repeat(n)+"♡".repeat(5-n); };
-const 상태말=c=> c.held? "들려 있음" : c.walk>1? "우다다 중" : c.walk? "산책 중" : ({부비기:"부비는 중",박치기:"박치기 중",츄르먹기:"츄르 먹는 중",웅크려자기:"자는 중",뻗어자기:"자는 중",식빵:"식빵 굽는 중",그루밍:"그루밍 중",하품:"하품 중",기지개:"기지개 중",창밖보기:"멍 때리는 중",앞발들기:"앞발 드는 중",배보이기:"배 보이는 중",꾹꾹이:"꾹꾹이 중",사냥자세:"사냥 자세",뛰어오르기:"점프!",엎드리기:"엎드려 있음"}[c.pose]||"서 있음");
+const 상태말=c=> c.held? "들려 있음" : c.perch? "캣타워에서 쉬는 중" : c.act? (c.act.kind==="긁기"?"스크래처 긁는 중":"밥 먹는 중") : c.goal? "놀러 가는 중" : c.walk>1? "우다다 중" : c.walk? "산책 중" : ({부비기:"부비는 중",박치기:"박치기 중",츄르먹기:"츄르 먹는 중",웅크려자기:"자는 중",뻗어자기:"자는 중",식빵:"식빵 굽는 중",그루밍:"그루밍 중",하품:"하품 중",기지개:"기지개 중",창밖보기:"멍 때리는 중",앞발들기:"앞발 드는 중",배보이기:"배 보이는 중",꾹꾹이:"꾹꾹이 중",사냥자세:"사냥 자세",뛰어오르기:"점프!",엎드리기:"엎드려 있음"}[c.pose]||"서 있음");
 function 냥이목록열기(){
   ptitle.textContent="카드를 누르면 그 아이에게 가요"; 탭표시("cats");
   const lw=landW();
@@ -1188,6 +1244,17 @@ function draw(){
   for(const c of [...CATS].sort((a,b)=>a.v-b.v)){
     if(c.held) continue;                                   // 들려 있는 아이는 손에서 그린다
     step(c, tt, dt);
+    if(c.perch && (!PROPSET.includes(c.perch.p) || !c.perch.p._box)) 침대내려오기(c, tt, true);   // 캣타워가 치워졌다
+    if(c.perch && tt>=c.perch.at){                          // 침대 위: 캣타워 그림의 그 자리에, 그 크기로
+      const b=c.perch.p._box, sp=앉는자리[c.perch.p.n][c.perch.k];
+      const im=poseImg(c, c.walk? 기본 : c.pose); if(!im||!im.complete||!im.naturalWidth) continue;
+      const hgt=b.h*sp.s, wid=hgt*im.naturalWidth/im.naturalHeight, x=b.x+b.w*sp.x-wid/2, y=b.y+b.h*sp.y;
+      if(x<-wid-pad||x>W+pad) continue;
+      cx.save(); cx.globalAlpha=.25; cx.fillStyle="#000"; cx.translate(x+wid/2,y); cx.scale(1,.18); cx.beginPath(); cx.arc(0,0,hgt*.45,0,7); cx.fill(); cx.restore();
+      breathe(im, x, y-hgt, wid, hgt, c.ph, tt, (c.wagUntil||0)-tt);
+      c._box={x, y:y-hgt, w:wid, h:hgt};
+      continue;
+    }
     const y=c.v*H;                          // 발이 닿는 높이
     const d=(y-hz)/(H-hz);                  // 0=지평선, 1=화면 맨 앞
     if(d<=0) continue;
